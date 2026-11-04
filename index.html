@@ -1,0 +1,1642 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f6d3f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+html{color-scheme:light}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;font:14px system-ui,-apple-system,"Segoe UI",sans-serif}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<title>Ficha de Voz · Fitopatologia</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icons/icon-192.png" type="image/png">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: instrumento de campo em coluna única — barra de identificação fixa no topo,
+   cartão da parcela corrente ao centro, barra de ditado colada ao teclado. */
+:root{
+  --bg:#f4f5f2; --surface:#ffffff; --surface-2:#eceee8; --line:#d4d8cf;
+  --fg:#1b2019; --fg-dim:#5d6657; --fg-faint:#878f80;
+  --accent:#2f6d3f; --accent-soft:#dcebdd; --accent-fg:#ffffff;
+  --signal:#b4531a; --signal-soft:#f7e3d4;
+  --alert:#8d2f2f; --alert-soft:#f5dcdc;
+  --ok:#2f6d3f;
+  --font-ui:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --font-head:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;
+  --font-num:"IBM Plex Mono",ui-monospace,"SFMono-Regular",monospace;
+  --r:10px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#13170f; --surface:#1c2118; --surface-2:#262c20; --line:#39412f;
+    --fg:#eaeee3; --fg-dim:#a9b39c; --fg-faint:#79836d;
+    --accent:#7fc18b; --accent-soft:#223425; --accent-fg:#0f1a11;
+    --signal:#e09055; --signal-soft:#3a2415;
+    --alert:#e58a8a; --alert-soft:#3a1c1c;
+    --ok:#7fc18b;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#13170f; --surface:#1c2118; --surface-2:#262c20; --line:#39412f;
+  --fg:#eaeee3; --fg-dim:#a9b39c; --fg-faint:#79836d;
+  --accent:#7fc18b; --accent-soft:#223425; --accent-fg:#0f1a11;
+  --signal:#e09055; --signal-soft:#3a2415;
+  --alert:#e58a8a; --alert-soft:#3a1c1c;
+  --ok:#7fc18b;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--fg); font-family:var(--font-ui); font-size:16px; line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:0;
+  display:flex; flex-direction:column;
+}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+*{box-sizing:border-box}
+button,input,select,textarea{font:inherit;color:inherit}
+h1,h2,h3{font-family:var(--font-head);text-wrap:balance;margin:0}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+
+/* ---- topo ---- */
+.topbar{
+  position:sticky; top:env(safe-area-inset-top,0px); z-index:11;
+  background:var(--surface); border-bottom:1px solid var(--line);
+  margin-inline:calc(-1 * max(16px,env(safe-area-inset-left,0px))) calc(-1 * max(16px,env(safe-area-inset-right,0px)));
+  padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px));
+  padding-block:8px;
+}
+.topline{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.proto{font-family:var(--font-head);font-size:1.05rem;font-weight:700;letter-spacing:.01em}
+.meta{color:var(--fg-dim);font-size:.78rem;display:flex;gap:10px;flex-wrap:wrap}
+.meta b{font-weight:600;color:var(--fg)}
+.progress{height:4px;background:var(--surface-2);border-radius:2px;overflow:hidden;margin-top:7px}
+.progress>i{display:block;height:100%;background:var(--accent);width:0;transition:width .25s}
+.tabs{display:flex;gap:4px;margin-top:8px;overflow-x:auto}
+.tabs button{
+  flex:1;min-width:56px;border:1px solid var(--line);background:transparent;color:var(--fg-dim);
+  border-radius:var(--r);padding:7px 3px;font-size:.78rem;font-weight:600;cursor:pointer;white-space:nowrap;
+}
+.tabs button[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+
+main{flex:1;padding-block:14px 0;display:flex;flex-direction:column;gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.card h2{font-size:1.05rem;letter-spacing:.01em;margin-bottom:2px}
+.muted{color:var(--fg-dim)}
+.tiny{font-size:.78rem}
+.row{display:flex;gap:8px;align-items:center}
+.wrap{flex-wrap:wrap}
+
+/* ---- parcela corrente ---- */
+.plothead{display:flex;align-items:center;gap:12px;justify-content:space-between}
+.plotnum{display:flex;align-items:baseline;gap:8px;min-width:0}
+.plotnum .lbl{font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--fg-faint);font-weight:600}
+.plotnum .val{font-family:var(--font-num);font-size:2.6rem;font-weight:600;line-height:1}
+.stepper{display:flex;gap:6px}
+.stepper button{
+  width:44px;height:44px;border-radius:var(--r);border:1px solid var(--line);
+  background:var(--surface-2);font-size:1.2rem;cursor:pointer;line-height:1;
+}
+.vars{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+.varrow{
+  display:grid;grid-template-columns:1fr 62px 86px;gap:8px;align-items:center;
+  padding:5px 10px;border-radius:8px;background:var(--surface-2);
+}
+.varrow .nm{font-weight:600;font-size:.95rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.varrow .ant{font-family:var(--font-num);font-size:.95rem;color:var(--fg-dim);text-align:right}
+.varrow .now{
+  font-family:var(--font-num);font-size:1.45rem;font-weight:600;text-align:right;
+  border:1px dashed var(--line);border-radius:6px;background:var(--surface);width:100%;padding:2px 8px;
+}
+.varrow .now:focus{border-style:solid;border-color:var(--accent);outline:none}
+.varrow.filled{background:var(--accent-soft)}
+.varrow.filled .now{border-style:solid;border-color:var(--accent)}
+.varrow.flag{box-shadow:inset 3px 0 0 var(--signal)}
+.varrow.cursor{outline:2px solid var(--accent);outline-offset:-2px}
+
+/* ---- avaliação guiada (mãos livres) ---- */
+.hf{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.hf .go{
+  flex:1;min-width:138px;border:1px solid transparent;border-radius:var(--r);background:var(--accent);color:var(--accent-fg);
+  font-family:var(--font-head);font-weight:700;font-size:.95rem;padding:12px 10px;cursor:pointer;letter-spacing:.02em;
+}
+.hf .go.alt{background:var(--surface-2);color:var(--fg);border-color:var(--line)}
+.hf .go.stop,.hf .go.alt.stop{background:var(--alert);border-color:var(--alert);color:#fff}
+.hf .go:disabled{opacity:.5;cursor:default}
+.hfstate{display:flex;align-items:center;gap:8px;font-size:.84rem;font-weight:600;color:var(--fg-dim);white-space:nowrap}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--line);flex:none}
+.hfstate.falando .dot{background:var(--signal)}
+.hfstate.ouvindo .dot{background:var(--alert);animation:pulse 1s ease-in-out infinite}
+.hfstate.pronto .dot{background:var(--accent)}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.45);opacity:.55}}
+@media (prefers-reduced-motion:reduce){.hfstate.ouvindo .dot{animation:none}}
+.hfheard{font-family:var(--font-num);font-size:.82rem;color:var(--fg-dim);min-height:1.2em;margin-top:8px}
+.hfheard b{color:var(--fg)}
+.varrow .caret{color:var(--accent);font-style:normal;margin-right:5px;font-weight:700}
+.varhead{display:grid;grid-template-columns:1fr 62px 86px;gap:8px;padding:0 10px;font-size:.68rem;
+  letter-spacing:.07em;text-transform:uppercase;color:var(--fg-faint);font-weight:600;
+  margin-top:14px;border-top:1px solid var(--line);padding-top:8px}
+.varhead span:nth-child(2),.varhead span:nth-child(3){text-align:right}
+
+/* ---- chips de parcelas ---- */
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{
+  font-family:var(--font-num);font-size:.8rem;min-width:34px;height:30px;padding:0 5px;
+  border-radius:6px;border:1px solid var(--line);background:transparent;color:var(--fg-dim);cursor:pointer;
+}
+.chip.done{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.chip.part{background:var(--signal-soft);border-color:var(--signal);color:var(--fg)}
+.chip.cur{outline:2px solid var(--fg);outline-offset:1px}
+
+/* ---- barra de ditado ---- */
+.entrybar{
+  position:sticky;bottom:0;z-index:9;background:var(--surface);border-top:1px solid var(--line);
+  margin-inline:calc(-1 * max(16px,env(safe-area-inset-left,0px))) calc(-1 * max(16px,env(safe-area-inset-right,0px)));
+  padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px));
+  padding-top:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));
+  display:flex;flex-direction:column;gap:8px;
+}
+.dictrow{display:flex;gap:8px;align-items:stretch}
+#say{
+  flex:1;min-width:0;resize:none;height:52px;border-radius:var(--r);border:1px solid var(--line);
+  background:var(--surface-2);padding:8px 10px;font-size:1.05rem;
+}
+#say:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.send{
+  width:92px;border:none;border-radius:var(--r);background:var(--accent);color:var(--accent-fg);
+  font-weight:700;font-size:.95rem;cursor:pointer;font-family:var(--font-head);letter-spacing:.02em;
+}
+.quick{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.quick button{
+  white-space:nowrap;border:1px solid var(--line);background:var(--surface-2);color:var(--fg-dim);
+  border-radius:999px;padding:6px 12px;font-size:.82rem;cursor:pointer;
+}
+.feedback{font-size:.84rem;min-height:1.25em;color:var(--fg-dim)}
+.feedback.ok{color:var(--ok)}
+.feedback.err{color:var(--alert);font-weight:600}
+
+/* ---- tabela ---- */
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.85rem}
+th,td{border-bottom:1px solid var(--line);padding:5px 7px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--surface)}
+thead th{background:var(--surface-2);font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;color:var(--fg-dim);font-weight:600}
+td input{width:54px;text-align:right;border:1px solid transparent;background:transparent;border-radius:4px;padding:2px 4px;font-family:var(--font-num)}
+td input:focus{border-color:var(--accent);outline:none;background:var(--surface-2)}
+td.ant{color:var(--fg-faint);font-family:var(--font-num)}
+tr.cur td{background:var(--accent-soft)}
+tr.cur td:first-child{background:var(--accent-soft)}
+
+/* ---- ajustes ---- */
+fieldset{border:1px solid var(--line);border-radius:var(--r);padding:12px;margin:0}
+legend{font-family:var(--font-head);font-weight:700;font-size:.9rem;padding:0 6px}
+label.f{display:flex;flex-direction:column;gap:3px;font-size:.78rem;color:var(--fg-dim);font-weight:600;min-width:0}
+label.f input,label.f select,label.f textarea{
+  border:1px solid var(--line);border-radius:6px;background:var(--surface-2);padding:7px 8px;
+  font-size:.95rem;font-weight:400;color:var(--fg);width:100%;
+}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.btn{
+  border:1px solid var(--line);background:var(--surface-2);color:var(--fg);border-radius:var(--r);
+  padding:9px 14px;font-weight:600;font-size:.88rem;cursor:pointer;
+}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.danger{color:var(--alert);border-color:var(--alert)}
+textarea.paste{height:110px;font-family:var(--font-num);font-size:.8rem}
+.varedit{display:grid;grid-template-columns:1.1fr .7fr 1.3fr auto auto;gap:6px;align-items:center;margin-bottom:6px}
+.histitem{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 10px;
+  border:1px solid var(--line);border-radius:8px;background:var(--surface-2);margin-bottom:6px}
+.histitem .n{font-family:var(--font-num);font-weight:700;color:var(--accent)}
+.histitem .d{font-size:.82rem;color:var(--fg-dim);min-width:0;flex:1}
+.histitem button{border:1px solid var(--line);background:transparent;color:var(--fg-dim);
+  border-radius:6px;padding:4px 9px;font-size:.78rem;cursor:pointer}
+.varedit input{border:1px solid var(--line);border-radius:6px;background:var(--surface-2);padding:6px 7px;width:100%;font-size:.85rem}
+.varedit button{border:1px solid var(--line);background:transparent;border-radius:6px;width:32px;height:32px;cursor:pointer;color:var(--fg-dim)}
+details{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:10px 12px}
+summary{font-family:var(--font-head);font-weight:700;cursor:pointer}
+details ul{margin:8px 0 0;padding-left:18px}
+details li{margin-bottom:5px;font-size:.88rem}
+code{font-family:var(--font-num);background:var(--surface-2);padding:1px 5px;border-radius:4px;font-size:.85em}
+.banner{
+  border:1px solid var(--signal);background:var(--signal-soft);color:var(--fg);
+  border-radius:var(--r);padding:9px 12px;font-size:.84rem;display:flex;gap:10px;align-items:center;justify-content:space-between
+}
+.toast{
+  position:fixed;left:50%;transform:translateX(-50%);bottom:calc(86px + env(safe-area-inset-bottom,0px));
+  background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:.86rem;font-weight:600;
+  z-index:30;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center
+}
+.toast.show{opacity:1}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+</head>
+<body>
+<header class="topbar">
+  <div class="topline">
+    <div class="proto" id="protoLabel">FP26PR_SO</div>
+    <div class="meta">
+      <span>Aval.: <b id="mAvaliador">—</b></span>
+      <span>Data: <b id="mData">—</b></span>
+      <span>Fen.: <b id="mFen">—</b></span>
+      <span><b id="mProg">0</b>/<b id="mTotal">0</b></span>
+    </div>
+  </div>
+  <div class="progress"><i id="bar"></i></div>
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tb-aval" aria-selected="true" data-tab="aval">Avaliar</button>
+    <button role="tab" id="tb-ficha" aria-selected="false" data-tab="ficha">Ficha</button>
+    <button role="tab" id="tb-hist" aria-selected="false" data-tab="hist">Histórico</button>
+    <button role="tab" id="tb-exp" aria-selected="false" data-tab="exp">Excel</button>
+    <button role="tab" id="tb-drive" aria-selected="false" data-tab="drive">Drive</button>
+    <button role="tab" id="tb-conf" aria-selected="false" data-tab="conf">Ajustes</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ================= AVALIAR ================= -->
+  <section id="tab-aval">
+    <div id="demoBanner" class="banner" hidden>
+      <span>Parcelas 1–3 estão preenchidas como exemplo.</span>
+      <button class="btn" id="clearDemo">Limpar</button>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <div class="hf">
+        <button class="go" id="saBtn">Assistida (offline)</button>
+        <button class="go alt" id="hfBtn">Guiada (mãos livres)</button>
+      </div>
+      <div class="hfstate" id="hfState" style="margin-top:10px"><i class="dot"></i><span id="hfStateTxt">Parado</span></div>
+      <div class="hfheard" id="hfHeard"></div>
+    </div>
+
+    <div class="card">
+      <div class="plothead">
+        <div class="plotnum">
+          <span class="lbl">Parcela</span>
+          <span class="val num" id="curPlot">1</span>
+        </div>
+        <div class="stepper">
+          <button id="prevPlot" title="Parcela anterior">◀</button>
+          <button id="nextPlot" title="Próxima parcela">▶</button>
+        </div>
+      </div>
+
+      <div class="varhead"><span>Doença / variável</span><span>Anterior</span><span>Agora</span></div>
+      <div class="vars" id="varRows"></div>
+    </div>
+
+    <div class="card">
+      <div class="tiny muted" style="margin-bottom:8px;font-weight:600;letter-spacing:.06em;text-transform:uppercase">Parcelas</div>
+      <div class="chips" id="chips"></div>
+    </div>
+  </section>
+
+  <!-- ================= FICHA ================= -->
+  <section id="tab-ficha" hidden>
+    <div class="tablewrap"><table id="fichaTable"></table></div>
+    <p class="tiny muted">Toque em qualquer célula “Agora” para corrigir no dedo. As colunas “Ant.” vêm da avaliação importada.</p>
+  </section>
+
+  <!-- ================= HISTÓRICO ================= -->
+  <section id="tab-hist" hidden>
+    <div class="card">
+      <h2>Fechar a avaliação de hoje</h2>
+      <p class="tiny muted">Arquiva as notas atuais como mais uma avaliação do ensaio, copia-as para a coluna “anterior” e deixa a ficha limpa para a próxima data.</p>
+      <div class="row wrap" style="margin-top:10px">
+        <button class="btn primary" id="finalizar">Finalizar avaliação</button>
+      </div>
+      <div class="tiny" id="histMsg" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <h2>Avaliações arquivadas</h2>
+      <div id="histList" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card">
+      <div class="row wrap" style="justify-content:space-between">
+        <h2>Agrupado por doença</h2>
+        <select id="histVar" style="border:1px solid var(--line);border-radius:6px;background:var(--surface-2);padding:6px 8px"></select>
+      </div>
+      <p class="tiny muted" style="margin:8px 0">Cada coluna é uma avaliação dessa doença, na ordem em que foram feitas. A data de cada uma aparece no cabeçalho.</p>
+      <div class="tablewrap"><table id="histTable"></table></div>
+    </div>
+  </section>
+
+  <!-- ================= EXPORTAR ================= -->
+  <section id="tab-exp" hidden>
+    <div class="card">
+      <h2>Arquivo Excel por doença</h2>
+      <p class="tiny muted">Uma aba por doença, no layout do seu modelo: cabeçalho do protocolo, uma coluna por avaliação (<span class="num">CÓDIGO-1</span>, <span class="num">CÓDIGO-2</span>…) e as parcelas nas linhas.</p>
+      <div class="row wrap" style="margin:10px 0">
+        <button class="btn primary" id="xlsxBtn">Baixar .xlsx</button>
+        <label class="f" style="flex:1;min-width:170px">
+          <span>Incluir</span>
+          <select id="xlsxScope">
+            <option value="all">Arquivadas + a de hoje</option>
+            <option value="hist">Só as arquivadas</option>
+          </select>
+        </label>
+      </div>
+      <div class="tiny" id="xlsxMsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Levar para a planilha</h2>
+      <p class="tiny muted">Copie e cole direto na célula da primeira parcela da sua ficha no Google Sheets. As colunas saem na ordem <span class="num">Parcela · Doença 1 (anterior) · Doença 2 (agora)</span>, igual à sua ficha.</p>
+      <div class="row wrap" style="margin:10px 0">
+        <button class="btn primary" id="copyAll">Copiar tudo</button>
+        <button class="btn" id="copyNow">Copiar só “agora”</button>
+        <label class="f" style="flex:1;min-width:150px">
+          <span>Incluir</span>
+          <select id="expScope"><option value="filled">Só parcelas avaliadas</option><option value="all">Todas as parcelas</option></select>
+        </label>
+      </div>
+      <textarea class="paste" id="expOut" readonly style="width:100%;height:160px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2);padding:8px;color:var(--fg)"></textarea>
+      <p class="tiny muted">Se o botão de copiar não funcionar no seu aparelho, segure o texto acima e use “Selecionar tudo → Copiar”.</p>
+    </div>
+    <div class="card">
+      <h2>Cabeçalho da ficha</h2>
+      <pre class="tiny num" id="expHead" style="white-space:pre-wrap;margin:8px 0 0;color:var(--fg-dim)"></pre>
+    </div>
+  </section>
+
+  <!-- ================= DRIVE E BACKUP ================= -->
+  <section id="tab-drive" hidden>
+    <div class="card">
+      <h2>Sincronização com Google Drive</h2>
+      <p class="tiny muted">As notas ficam neste dispositivo e podem ser enviadas à pasta <b>Avaliacoes_Fitopatologia</b> do seu Drive. O trabalho no campo continua sem internet; a sincronização exige conexão e autorização Google ativa.</p>
+      <label class="f" style="margin:10px 0">ID do cliente OAuth 2.0 (Google Cloud)
+        <input id="driveClientId" autocomplete="off" spellcheck="false" placeholder="xxxxxxxx.apps.googleusercontent.com">
+      </label>
+      <div class="row wrap">
+        <button class="btn primary" id="driveConnect">Conectar Google</button>
+        <button class="btn" id="driveSync">Sincronizar agora</button>
+        <button class="btn" id="driveRestore">Restaurar do Drive</button>
+      </div>
+      <p id="driveStatus" class="tiny muted" role="status" aria-live="polite" style="margin:10px 0 0">Drive desconectado. As avaliações continuam salvas localmente.</p>
+      <p id="driveSyncInfo" class="tiny muted" style="margin:6px 0 0"></p>
+      <div class="row wrap" style="margin-top:10px">
+        <button class="btn" id="driveOverwrite">Substituir cópia remota (com backup)</button>
+        <button class="btn" id="driveOpen">Abrir pasta no Drive</button>
+      </div>
+      <p class="tiny muted">Conflitos são bloqueados para evitar sobrescrever notas de outro dispositivo. Antes de substituir a cópia remota, o aplicativo cria um backup no Drive.</p>
+    </div>
+    <div class="card">
+      <h2>Backup local</h2>
+      <p class="tiny muted">Recomendado antes de trocar de aparelho. A exportação JSON preserva notas, avaliações arquivadas, variáveis e configurações; o Excel continua na aba Excel.</p>
+      <div class="row wrap" style="margin:10px 0">
+        <button class="btn primary" id="backupDownload">Baixar backup .json</button>
+        <label class="btn" for="backupImport">Importar backup .json</label>
+        <input type="file" id="backupImport" accept=".json,application/json" hidden>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= AJUSTES ================= -->
+  <section id="tab-conf" hidden>
+    <fieldset>
+      <legend>Identificação</legend>
+      <div class="grid2">
+        <label class="f">Protocolo<input id="cProto" placeholder="FP26PR_SO132"></label>
+        <label class="f">Avaliador<input id="cAval" placeholder="Nome"></label>
+        <label class="f">Data<input id="cData" type="date"></label>
+        <label class="f">Fenologia<input id="cFen" placeholder="R5.3"></label>
+        <label class="f">Área aval.<input id="cArea" placeholder="Folíolos / 3 trifólios"></label>
+        <label class="f">Data aplic.<input id="cDataAp" type="date"></label>
+        <label class="f">Nº aplic.<input id="cNap" type="number" min="0" step="1"></label>
+        <label class="f">Nº de parcelas (até 150)<input id="cNpar" type="number" min="1" max="150" step="1"></label>
+      </div>
+    </fieldset>
+
+    <fieldset style="margin-top:12px">
+      <legend>Variáveis e apelidos de voz</legend>
+      <p class="tiny muted" style="margin-top:0">A ordem aqui é a ordem em que você fala no modo sequencial. Apelidos separados por vírgula — fale qualquer um deles.</p>
+      <div id="varEditor"></div>
+      <button class="btn" id="addVar">+ Variável</button>
+    </fieldset>
+
+    <fieldset style="margin-top:12px">
+      <legend>Avaliação anterior</legend>
+      <p class="tiny muted" style="margin-top:0">Digite direto nas colunas, ou copie o bloco da planilha e cole em qualquer célula. Se o cabeçalho vier junto, cada doença é reconhecida pelo nome e vai para a coluna certa — inclusive quando a planilha traz <span class="num">Doença 1</span> e <span class="num">Doença 2</span> lado a lado (entra a coluna 1, a anterior).</p>
+      <div class="row wrap" style="margin-bottom:8px">
+        <button class="btn danger" id="impClear">Apagar anteriores</button>
+      </div>
+      <div class="tablewrap" style="max-height:320px;overflow-y:auto"><table id="antTable"></table></div>
+      <div class="tiny" id="impMsg" style="margin-top:6px"></div>
+    </fieldset>
+
+    <fieldset style="margin-top:12px">
+      <legend>Voz e tela</legend>
+      <div class="grid2">
+        <label class="f">Confirmação falada
+          <select id="cTts"><option value="short">Resumida (só números)</option><option value="full">Completa (nome + nota)</option><option value="off">Desligada</option></select>
+        </label>
+        <label class="f">Velocidade da fala<input id="cRate" type="range" min="0.8" max="1.8" step="0.1"></label>
+        <label class="f">Avançar sozinho
+          <select id="cAuto"><option value="1">Sim, ao completar a parcela</option><option value="0">Não</option></select>
+        </label>
+        <label class="f">Manter tela ligada
+          <select id="cWake"><option value="1">Sim</option><option value="0">Não</option></select>
+        </label>
+        <label class="f">Guiada: falar nota anterior
+          <select id="cHfAnt"><option value="1">Sim</option><option value="0">Não</option></select>
+        </label>
+        <label class="f">Guiada: apito antes de ouvir
+          <select id="cHfBeep"><option value="1">Sim</option><option value="0">Não</option></select>
+        </label>
+        <label class="f">Assistida: espera antes de lançar
+          <select id="cSaDelay">
+            <option value="800">0,8 s</option><option value="1100">1,1 s</option>
+            <option value="1500">1,5 s</option><option value="2000">2,0 s</option>
+          </select>
+        </label>
+        <label class="f">Assistida: reabrir o teclado sozinho
+          <select id="cSaFocus"><option value="1">Sim</option><option value="0">Não</option></select>
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset style="margin-top:12px">
+      <legend>Sessão</legend>
+      <div class="row wrap">
+        <button class="btn danger" id="resetNotes">Zerar notas desta avaliação</button>
+        <button class="btn danger" id="resetAll">Recomeçar do zero</button>
+      </div>
+      <div class="tiny muted" id="storeMsg" style="margin-top:8px"></div>
+    </fieldset>
+
+    <details style="margin-top:12px">
+      <summary>Como falar</summary>
+      <ul>
+        <li><b>Uma nota por vez</b> (o normal): fale só o número. Ele entra na doença destacada com <b>▸</b>, e o cursor pula para a próxima da lista dos Ajustes. Ao fechar a última, a parcela avança sozinha e o cursor volta para a primeira doença.</li>
+        <li>Pode emendar várias de uma vez: <code>cinco, dez, zero</code> preenche três doenças seguidas. A sequência inteira também funciona: <code>doze, cinco, dez, zero, zero, vinte</code> = parcela 12 e todas as notas.</li>
+        <li><b>Trocar de parcela</b>: diga <code>parcela trinta</code> (só o número já é nota, não parcela).</li>
+        <li><b>Por nome</b>, quando quiser corrigir uma doença fora da ordem: <code>ferrugem dez</code>.</li>
+        <li>Decimais: <code>zero vírgula cinco</code>, <code>dois e meio</code>, <code>1,5</code>.</li>
+        <li>Pular a doença do cursor sem anotar: <code>traço</code> ou <code>vazio</code>.</li>
+        <li>Comandos: <code>tudo zero</code> · <code>repete</code> · <code>corrige</code> (limpa a parcela) · <code>desfaz</code> · <code>próxima</code> · <code>volta</code>.</li>
+      </ul>
+    </details>
+  </section>
+</main>
+
+<div class="entrybar" id="entrybar">
+  <div class="feedback" id="fb">Toque no campo, use o microfone do teclado e fale só o número.</div>
+  <div class="dictrow">
+    <textarea id="say" rows="1" enterkeyhint="done" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="só o número da doença destacada…"></textarea>
+    <button class="send" id="sendBtn">Lançar</button>
+  </div>
+  <div class="quick">
+    <button data-cmd="tudo zero">Tudo zero</button>
+    <button data-cmd="repete">Repetir</button>
+    <button data-cmd="desfaz">Desfazer</button>
+    <button data-cmd="corrige">Limpar parcela</button>
+    <button data-cmd="proxima">Próxima ▶</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ============================ estado ============================ */
+const KEY = "fichaVoz.v2";
+const DEFAULT_VARS = [
+  { id:"v1", name:"Oídio",           code:"MCRSDI", aliases:"oidio, oídio, oid" },
+  { id:"v2", name:"Ferrugem",        code:"PHAKPA", aliases:"ferrugem, ferrug, fer" },
+  { id:"v3", name:"DFC's",           code:"DFC",    aliases:"dfc, dfcs, de efe ce, cercospora, mancha alvo" },
+  { id:"v4", name:"Fitotoxicidade",  code:"PHYTOX", aliases:"fito, fitotox, fitotoxicidade, toxidez" },
+  { id:"v5", name:"Desfolha",        code:"DESF",   aliases:"desfolha, desf, desfolhamento" }
+];
+const today = new Date().toISOString().slice(0,10);
+let S = {
+  proto:"FP26PR_SO", avaliador:"", data:today, fen:"", area:"", dataAp:"", nap:"",
+  npar:48, vars:DEFAULT_VARS.map(v=>({...v})),
+  cur:1, cursor:0, notes:{}, ant:{}, hist:[], tts:"short", rate:1.2, auto:"1", wake:"1",
+  hfAnt:"1", hfBeep:"1", saDelay:"1100", saFocus:"1", demo:true
+};
+let undoStack = [];
+let activeTab = "aval";
+
+/* ============================ persistência ============================ */
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); window.dispatchEvent(new Event("ficha:changed")); }
+  catch(e){ el("storeMsg").textContent = "Este navegador não está guardando os dados automaticamente — exporte antes de fechar."; }
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(raw){ const o = JSON.parse(raw); if(o && o.vars) { S = Object.assign(S,o); migrate(); return true; } }
+  }catch(e){}
+  return false;
+}
+// completa campos de versões anteriores do app
+function migrate(){
+  if(!Array.isArray(S.hist)) S.hist=[];
+  const known={"oidio":"MCRSDI","ferrugem":"PHAKPA","dfc":"DFC","dfc s":"DFC","fitotoxicidade":"PHYTOX","desfolha":"DESF"};
+  S.vars.forEach(v=>{
+    if(v.code) return;
+    const k=norm(v.name);
+    v.code = known[k] || (k.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,8) || "VAR");
+  });
+}
+const el = id => document.getElementById(id);
+
+/* ============================ números em português ============================ */
+const NUMW = {zero:0,um:1,uma:1,dois:2,duas:2,tres:3,quatro:4,cinco:5,seis:6,sete:7,oito:8,nove:9,
+  dez:10,onze:11,doze:12,treze:13,quatorze:14,catorze:14,quinze:15,dezesseis:16,dezasseis:16,
+  dezessete:17,dezassete:17,dezoito:18,dezenove:19,dezanove:19,vinte:20,trinta:30,quarenta:40,
+  cinquenta:50,cincoenta:50,sessenta:60,setenta:70,oitenta:80,noventa:90,cem:100,cento:100};
+const FILLER = new Set(["de","da","do","com","em","no","na","nota","severidade","porcento","%","por","cento","deu","ficou","esta","está","foi","igual","a","o","pra","para"]);
+const SKIPW  = new Set(["traco","traço","vazio","branco","nd","pula","pulo","nulo"]);
+
+function norm(t){
+  return (t||"").toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g,"")
+    .replace(/(\d),(\d)/g,"$1.$2")
+    .replace(/[^\wÀ-ÿ.\s%-]/g," ")
+    .replace(/\s+/g," ").trim();
+}
+function isDigit(t){ return /^\d+(\.\d+)?$/.test(t); }
+
+// lê um número a partir de tokens[i]; retorna {v, next} ou null
+function readNum(tk,i){
+  let v=null, j=i;
+  if(isDigit(tk[j])){ v=parseFloat(tk[j]); j++; }
+  else if(tk[j] in NUMW){
+    v=NUMW[tk[j]]; j++;
+    if(v>=20 && v<100 && tk[j]==="e" && (tk[j+1] in NUMW) && NUMW[tk[j+1]]<10){ v+=NUMW[tk[j+1]]; j+=2; }
+    else if(v===100 && tk[j]==="e"){ j++; const r=readNum(tk,j); if(r){ v+=r.v; j=r.next; } }
+  }
+  else if(tk[j]==="meio"||tk[j]==="meia"){ return {v:0.5,next:j+1}; }
+  else return null;
+  // decimal falado
+  if(tk[j]==="virgula"||tk[j]==="ponto"){
+    const r = readNum(tk,j+1);
+    if(r && r.v>=0 && r.v<100){ v = v + (r.v<10 ? r.v/10 : r.v/100); j = r.next; }
+  } else if(tk[j]==="e" && (tk[j+1]==="meio"||tk[j+1]==="meia")){ v+=0.5; j+=2; }
+  return {v,next:j};
+}
+
+function matchVar(tk,i){
+  const rest = tk.slice(i, i+4).join(" ");
+  let best=null;
+  S.vars.forEach((v,idx)=>{
+    v.aliases.split(",").map(a=>norm(a.trim())).filter(Boolean).forEach(a=>{
+      if(!a) return;
+      if(rest===a || rest.startsWith(a+" ") || (a.length>=4 && rest.startsWith(a))){
+        const len = a.split(" ").length;
+        if(!best || len>best.len) best={idx,len};
+      }
+    });
+  });
+  return best;
+}
+
+/* ============================ interpretação da fala ============================ */
+function interpret(raw){
+  const text = norm(raw);
+  if(!text) return {type:"empty"};
+  const tk = text.split(" ");
+  const joined = tk.join(" ");
+  const skipF = i => { while(i<tk.length && FILLER.has(tk[i])) i++; return i; };
+
+  // comandos
+  if(/^(tudo zero|zero tudo|tudo limpo|sem doenca|sem nada|zerado)/.test(joined)) return {type:"cmd",cmd:"allzero"};
+  if(/^(repete|repetir|confirma|confirmar|le de novo|leia)/.test(joined))        return {type:"cmd",cmd:"repeat"};
+  if(/^(corrige|corrigir|apaga|apagar|limpa|limpar|errei)/.test(joined))         return {type:"cmd",cmd:"clear"};
+  if(/^(desfaz|desfazer|volta atras|cancela)/.test(joined))                      return {type:"cmd",cmd:"undo"};
+  if(/^(proxima|proximo|segue|avanca|avancar)/.test(joined))                     return {type:"cmd",cmd:"next"};
+  if(/^(volta|voltar|anterior|parcela anterior)$/.test(joined))                  return {type:"cmd",cmd:"prev"};
+  if(/^(pausa|pausar|parar|pare|para|encerra|encerrar|chega|fim)\b/.test(joined))return {type:"cmd",cmd:"stop"};
+
+  // "parcela N"
+  let parcela=null, i=0;
+  if(tk[0]==="parcela"||tk[0]==="parcelas"||tk[0]==="p"){
+    const r=readNum(tk,skipF(1)); if(r){ parcela=r.v; i=r.next; } else i=1;
+  }
+
+  // modo nomeado?
+  let named=false;
+  for(let k=i;k<tk.length;k++){ if(matchVar(tk,k)){ named=true; break; } }
+
+  const values={};
+  if(named){
+    let k=i;
+    while(k<tk.length){
+      const m=matchVar(tk,k);
+      if(m){
+        const r=readNum(tk,skipF(k+m.len));
+        if(r){ values[S.vars[m.idx].id]=r.v; k=r.next; continue; }
+        k+=m.len; continue;
+      }
+      // "cinco de oidio"
+      const r=readNum(tk,k);
+      if(r){
+        const m2=matchVar(tk,skipF(r.next));
+        if(m2){ values[S.vars[m2.idx].id]=r.v; k=skipF(r.next)+m2.len; continue; }
+        k=r.next; continue;
+      }
+      k++;
+    }
+    if(!Object.keys(values).length && parcela!==null) return {type:"plotonly",parcela};
+    return {type:"data",parcela,values,mode:"named"};
+  }
+
+  // modo sequencial: lista de números na ordem das variáveis
+  const seq=[];
+  let k=i;
+  while(k<tk.length){
+    if(SKIPW.has(tk[k])){ seq.push(null); k++; continue; }
+    const r=readNum(tk,k);
+    if(r){ seq.push(r.v); k=r.next; } else k++;
+  }
+  if(seq.length===0) return parcela!==null ? {type:"plotonly",parcela} : {type:"unknown",text};
+
+  const n=S.vars.length;
+  // "doze, cinco, dez, zero, zero, vinte" = número da parcela + todas as notas
+  if(parcela===null && seq.length===n+1 && S.cursor===0) parcela=seq.shift();
+  return {type:"seq",parcela,seq};
+}
+
+/* ============================ voz de retorno ============================ */
+let ptVoice=null;
+function pickVoice(){
+  try{
+    const vs=speechSynthesis.getVoices();
+    ptVoice = vs.find(v=>/pt[-_]BR/i.test(v.lang)) || vs.find(v=>/^pt/i.test(v.lang)) || null;
+  }catch(e){}
+}
+if("speechSynthesis" in window){ pickVoice(); speechSynthesis.onvoiceschanged=pickVoice; }
+let quiet=false;   // o ciclo guiado monta a própria fala; silencia a fala avulsa
+function speak(txt, onEnd){
+  if(quiet && !onEnd) return;
+  if((S.tts==="off" && !onEnd) || !("speechSynthesis" in window) || !txt){ if(onEnd) onEnd(); return; }
+  try{
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(txt);
+    u.lang="pt-BR"; u.rate=parseFloat(S.rate)||1.2; if(ptVoice) u.voice=ptVoice;
+    if(onEnd){
+      let done=false; const fire=()=>{ if(done) return; done=true; onEnd(); };
+      u.onend=fire; u.onerror=fire;
+      // alguns navegadores móveis não disparam onend: rede de segurança pelo tamanho do texto
+      setTimeout(fire, Math.min(9000, 900 + txt.length*75));
+    }
+    speechSynthesis.speak(u);
+  }catch(e){ if(onEnd) onEnd(); }
+}
+function fmt(n){ return (n===null||n===undefined||n==="") ? "—" : String(n).replace(".",","); }
+function readback(p){
+  const row=S.notes[p]||{};
+  const parts=S.vars.map(v=> S.tts==="full" ? `${v.name} ${fmt(row[v.id])}` : fmt(row[v.id]));
+  speak(`Parcela ${p}. ${parts.join(", ")}`);
+}
+
+/* ============================ ações ============================ */
+// primeira variável ainda em branco da parcela — é onde o cursor pousa ao entrar nela
+function firstEmpty(p){
+  const row=S.notes[p]||{};
+  const i=S.vars.findIndex(v=> row[v.id]===undefined || row[v.id]===null);
+  return i<0 ? 0 : i;
+}
+function setPlot(p){
+  p=Math.max(1,Math.min(S.npar,Math.round(p)));
+  S.cur=p; S.cursor=firstEmpty(p); render(); save();
+}
+function pushUndo(){
+  undoStack.push({notes:JSON.parse(JSON.stringify(S.notes)), cur:S.cur, cursor:S.cursor});
+  if(undoStack.length>25) undoStack.shift();
+}
+function undo(){
+  const u=undoStack.pop();
+  if(!u){ flash("Nada para desfazer.","err"); return; }
+  S.notes=u.notes; S.cur=u.cur; S.cursor=u.cursor;
+  save(); render(); flash(`Desfeito — parcela ${S.cur}, ${S.vars[S.cursor].name}.`,"ok"); speak("desfeito");
+}
+function applyValues(p,values){
+  pushUndo();
+  S.notes[p]=Object.assign({}, S.notes[p]||{}, values);
+  S.demo=false;
+  const complete = S.vars.every(v=> S.notes[p][v.id]!==undefined && S.notes[p][v.id]!==null );
+  S.cursor=firstEmpty(p);
+  save(); render();
+  readback(p);
+  if(complete && S.auto==="1" && p<S.npar) setTimeout(()=>setPlot(p+1), 350);
+  return complete;
+}
+// preenche a partir do cursor, uma variável por número, avançando a parcela ao fechar a sequência
+function applySeq(seq){
+  const n=S.vars.length;
+  pushUndo();
+  let wrote=0, ignored=0, lastVal=null, lastName="", completedP=null;
+  for(const val of seq){
+    if(S.cursor>=n) S.cursor=0;
+    const v=S.vars[S.cursor];
+    if(val!==null && val!==undefined){
+      S.notes[S.cur]=Object.assign({},S.notes[S.cur]||{});
+      S.notes[S.cur][v.id]=val;
+      wrote++; lastVal=val; lastName=v.name;
+    }
+    S.cursor++;
+    if(S.cursor>=n){
+      completedP=S.cur; S.cursor=0;
+      if(S.auto==="1" && S.cur<S.npar) S.cur++;
+      else { ignored = seq.length - (seq.indexOf(val)+1); break; }
+    }
+  }
+  S.demo=false;
+  save(); render();
+
+  const nextName=S.vars[S.cursor].name;
+  lastEntry={val:lastVal, name:lastName, completedP, wrote};
+  if(!wrote){ flash(`Nada lançado — próxima: ${nextName}.`,"err"); return; }
+  const dito = S.tts==="full" ? `${lastName} ${fmt(lastVal)}` : fmt(lastVal);
+  if(completedP!==null){
+    if(S.auto==="1" && completedP!==S.cur){
+      flash(`Parcela ${completedP} completa. Agora parcela ${S.cur} — ${nextName}.`,"ok");
+      if(wrote>1) { readback(completedP); } else { speak(`${dito}. Parcela ${S.cur}.`); }
+    } else {
+      flash(`Parcela ${completedP} completa.${ignored?` ${ignored} nota(s) a mais ignorada(s).`:""}`,"ok");
+      readback(completedP);
+    }
+  } else {
+    flash(`${lastName}: ${fmt(lastVal)} · próxima: ${nextName}`,"ok");
+    if(wrote>1) readback(S.cur); else speak(`${dito}. ${nextName}.`);
+  }
+}
+function flash(msg,kind){
+  const f=el("fb"); f.textContent=msg; f.className="feedback "+(kind||"");
+}
+let toastT;
+function toast(msg){
+  const t=el("toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("show"),1800);
+}
+
+function handle(raw){
+  const r=interpret(raw);
+  switch(r.type){
+    case "empty": return;
+    case "cmd":
+      if(r.cmd==="allzero"){ S.cursor=0; applySeq(new Array(S.vars.length).fill(0)); }
+      if(r.cmd==="repeat"){ readback(S.cur); flash(`Lendo parcela ${S.cur} · próxima: ${S.vars[S.cursor].name}`,"ok"); }
+      if(r.cmd==="clear"){ pushUndo(); delete S.notes[S.cur]; S.cursor=0; save(); render(); flash(`Parcela ${S.cur} limpa — recomece por ${S.vars[0].name}.`,"ok"); speak("limpo"); }
+      if(r.cmd==="undo") undo();
+      if(r.cmd==="next"){ setPlot(S.cur+1); flash(`Parcela ${S.cur}.`,"ok"); speak(`parcela ${S.cur}`); }
+      if(r.cmd==="prev"){ setPlot(S.cur-1); flash(`Parcela ${S.cur}.`,"ok"); speak(`parcela ${S.cur}`); }
+      if(r.cmd==="stop"){ if(hf.on) hfStop("Pausado por comando de voz."); else flash("Avaliação guiada não está ativa.","ok"); }
+      return;
+    case "plotonly":
+      setPlot(r.parcela);
+      flash(`Parcela ${S.cur} — comece por ${S.vars[S.cursor].name}.`,"ok");
+      speak(`parcela ${S.cur}. ${S.vars[S.cursor].name}.`); return;
+    case "seq": {
+      if(r.parcela!==null && r.parcela!==undefined){
+        const p=Math.round(r.parcela);
+        if(p<1||p>S.npar){ flash(`Parcela ${p} fora do intervalo 1–${S.npar}.`,"err"); speak("parcela inválida"); return; }
+        S.cur=p; S.cursor=0;
+      }
+      const bad=r.seq.find(v=> v!==null && (v<0||v>100));
+      if(bad!==undefined){ flash(`Nota ${fmt(bad)} fora de 0–100.`,"err"); speak("nota inválida"); return; }
+      applySeq(r.seq);
+      return;
+    }
+    case "unknown":
+      flash(`Não entendi: “${r.text}”. Use o botão Ajustes → Como falar.`,"err"); speak("não entendi"); return;
+    case "data": {
+      const p = r.parcela!==null && r.parcela!==undefined ? Math.round(r.parcela) : S.cur;
+      if(p<1||p>S.npar){ flash(`Parcela ${p} fora do intervalo 1–${S.npar}.`,"err"); speak("parcela inválida"); return; }
+      const bad=Object.entries(r.values).find(([,v])=> v<0 || v>100);
+      if(bad){ flash(`Nota ${fmt(bad[1])} fora de 0–100.`,"err"); speak("nota inválida"); return; }
+      S.cur=p;
+      const n=Object.keys(r.values).length;
+      if(!n){ flash("Nenhuma nota reconhecida.","err"); speak("não entendi"); return; }
+      applyValues(p,r.values,r.mode);
+      flash(`Parcela ${p}: ${n} nota${n===1?"":"s"} lançada${n===1?"":"s"}.`,"ok");
+      return;
+    }
+  }
+}
+
+/* ============================ avaliação guiada (mãos livres) ============================ */
+// Ciclo: fala "parcela / doença / nota anterior" -> apito -> ouve -> lança -> repete.
+// Usa o reconhecimento de voz do navegador, que no celular depende de internet.
+let lastEntry={};
+const hf = { on:false, rec:null, listening:false, speaking:false, handled:false,
+             retries:0, lastParcela:null, wl:null, prompt:"" };
+
+function hasSR(){ return !!(window.SpeechRecognition || window.webkitSpeechRecognition); }
+function hfMsg(t){ el("hfHeard").innerHTML=t||""; }
+function renderModes(){
+  const h=el("hfBtn"), s=el("saBtn");
+  h.textContent = hf.on ? "Parar" : "Guiada (mãos livres)";
+  h.classList.toggle("stop", hf.on); h.disabled = sa.on;
+  s.textContent = sa.on ? "Parar" : "Assistida (offline)";
+  s.classList.toggle("stop", sa.on); s.disabled = hf.on;
+}
+function hfState(cls,txt){
+  const s=el("hfState"); s.className="hfstate "+(cls||"");
+  el("hfStateTxt").textContent=txt;
+  renderModes();
+}
+function beep(){
+  if(S.hfBeep!=="1") return;
+  try{
+    const C=window.AudioContext||window.webkitAudioContext; if(!C) return;
+    hf.ac = hf.ac || new C();
+    const o=hf.ac.createOscillator(), g=hf.ac.createGain();
+    o.frequency.value=880; o.type="sine";
+    g.gain.setValueAtTime(0.0001,hf.ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.25,hf.ac.currentTime+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,hf.ac.currentTime+0.12);
+    o.connect(g); g.connect(hf.ac.destination); o.start(); o.stop(hf.ac.currentTime+0.13);
+  }catch(e){}
+}
+// texto do próximo pedido: parcela só quando muda, doença sempre, anterior se houver
+function hfPrompt(){
+  const p=S.cur, v=S.vars[S.cursor];
+  let t="";
+  if(hf.lastParcela!==p){ t+=`Parcela ${p}. `; hf.lastParcela=p; }
+  t+=v.name+". ";
+  if(S.hfAnt==="1"){
+    const a=(S.ant[p]||{})[v.id];
+    if(a!==undefined && a!==null) t+=`Anterior ${fmt(a)}. `;
+  }
+  return t;
+}
+function hfStart(){
+  if(!hasSR()){
+    hfMsg("Este navegador não tem reconhecimento de voz. Use o microfone do teclado e o botão Lançar.");
+    return;
+  }
+  hf.on=true; hf.retries=0; hf.lastParcela=null; quiet=false;
+  try{ if(navigator.wakeLock && !hf.wl) navigator.wakeLock.request("screen").then(w=>hf.wl=w).catch(()=>{}); }catch(e){}
+  // o áudio precisa nascer dentro do toque do usuário (exigência do iOS)
+  try{
+    const C=window.AudioContext||window.webkitAudioContext;
+    if(C){ hf.ac = hf.ac || new C(); if(hf.ac.state==="suspended") hf.ac.resume(); }
+  }catch(e){}
+  hfSay(hfPrompt());
+}
+function hfStop(msg){
+  hf.on=false; hf.speaking=false; hf.listening=false; quiet=false;
+  try{ hf.rec && hf.rec.abort(); }catch(e){}
+  try{ speechSynthesis.cancel(); }catch(e){}
+  try{ hf.wl && hf.wl.release(); }catch(e){}
+  hf.wl=null;
+  hfState("","Parado");
+  if(msg) hfMsg(msg);
+}
+// `text` é o que se fala agora (pode trazer a confirmação da nota anterior);
+// `ask` é só o pedido, usado quando for preciso repetir sem reler a nota já lançada.
+function hfSay(text, ask){
+  if(!hf.on) return;
+  hf.prompt=text; hf.ask=ask||text;
+  hf.speaking=true; hfState("falando","Falando…");
+  speak(text, ()=>{
+    hf.speaking=false;
+    if(!hf.on) return;
+    beep();
+    setTimeout(hfListen, S.hfBeep==="1" ? 180 : 80);
+  });
+}
+function hfListen(){
+  if(!hf.on) return;
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  let rec;
+  try{ rec=new SR(); }catch(e){ hfStop("Não foi possível abrir o microfone."); return; }
+  hf.rec=rec; hf.handled=false;
+  rec.lang="pt-BR"; rec.continuous=false; rec.interimResults=false; rec.maxAlternatives=4;
+  rec.onresult=e=>{
+    hf.handled=true;
+    const alts=[]; for(let i=0;i<e.results[0].length;i++) alts.push(e.results[0][i].transcript);
+    hfApply(alts);
+  };
+  rec.onerror=e=>{ hf.handled=true; hfError(e.error); };
+  rec.onend=()=>{
+    hf.listening=false;
+    if(hf.on && !hf.handled) hfError("no-speech");
+  };
+  try{ rec.start(); hf.listening=true; hfState("ouvindo","Ouvindo…"); }
+  catch(e){ hfError("start"); }
+}
+function hfError(code){
+  if(!hf.on) return;
+  if(code==="aborted") return;
+  if(code==="not-allowed" || code==="service-not-allowed"){
+    hfStop("Microfone bloqueado. Autorize o microfone para este endereço e inicie de novo."); return;
+  }
+  if(code==="network"){
+    hfStop("O reconhecimento de voz do navegador ficou sem internet. Sem sinal, use o microfone do teclado."); return;
+  }
+  hf.retries++;
+  if(hf.retries>=3){ hfStop("Não consegui ouvir três vezes seguidas — pausei. Toque em Iniciar para continuar."); return; }
+  hfSay("Repita. "+hf.ask, hf.ask);
+}
+// tenta cada alternativa do reconhecedor até uma virar nota ou comando
+function hfApply(alts){
+  hfState("","Processando…");
+  let used=null, r=null;
+  for(const a of alts){
+    const x=interpret(a);
+    if(x.type==="seq" && x.seq.length) { used=a; r=x; break; }   // inclui "traço" (pular)
+    if(x.type==="cmd" || x.type==="plotonly"){ used=a; r=x; break; }
+  }
+  if(!r){
+    hfMsg(`Ouvi: <b>${(alts[0]||"—").slice(0,60)}</b> — não virou nota.`);
+    hf.retries++;
+    if(hf.retries>=3){ hfStop("Não entendi três vezes seguidas — pausei."); return; }
+    hfSay("Não entendi. "+hf.ask, hf.ask);
+    return;
+  }
+  hf.retries=0;
+  hfMsg(`Ouvi: <b>${used}</b>`);
+
+  if(r.type==="cmd"){
+    if(r.cmd==="stop"){ hfStop("Pausado por comando de voz."); return; }
+    if(r.cmd==="repeat"){ hfSay(hf.ask, hf.ask); return; }
+    if(r.cmd==="undo"){ quiet=true; undo(); quiet=false; hf.lastParcela=null; const a=hfPrompt(); hfSay("Desfeito. "+a, a); return; }
+    if(r.cmd==="clear"){ quiet=true; handle(used); quiet=false; hf.lastParcela=null; const a=hfPrompt(); hfSay("Parcela limpa. "+a, a); return; }
+    if(r.cmd==="allzero"){
+      quiet=true; handle(used); quiet=false;
+      const a=hfPrompt(); hfSay("Tudo zero. "+a, a); return;
+    }
+    if(r.cmd==="next"||r.cmd==="prev"){ quiet=true; handle(used); quiet=false; hf.lastParcela=null; hfSay(hfPrompt()); return; }
+  }
+  if(r.type==="plotonly"){ quiet=true; handle(used); quiet=false; hf.lastParcela=null; hfSay(hfPrompt()); return; }
+
+  // nota: lança e emenda a confirmação com o próximo pedido
+  quiet=true; handle(used); quiet=false;
+  const dito = lastEntry.wrote ? `${fmt(lastEntry.val)}. ` : "";
+  if(lastEntry.completedP===S.npar && S.cur===S.npar && S.cursor===0){
+    hfStop("Última parcela concluída. Vá em Histórico para finalizar a avaliação.");
+    speak(`${dito}Avaliação concluída.`);
+    return;
+  }
+  const ask = hfPrompt();
+  hfSay(dito + ask, ask);
+}
+/* ---------------- modo assistido: funciona offline ----------------
+   Fala o pedido, mantém o cursor no campo e lança sozinho quando o ditado
+   do teclado para. Um toque no microfone do teclado por nota.            */
+const sa = { on:false, timer:null, ask:"" };
+function saStart(){
+  if(hf.on) return;
+  sa.on=true; sa.speaking=false; hf.lastParcela=null;
+  try{ if(navigator.wakeLock && !hf.wl) navigator.wakeLock.request("screen").then(w=>hf.wl=w).catch(()=>{}); }catch(e){}
+  hfMsg("A cada nota: toque o microfone do teclado, fale e espere — eu lanço, fecho o microfone e falo a próxima.");
+  saAsk();
+}
+function saStop(msg){
+  sa.on=false; sa.speaking=false; clearTimeout(sa.timer);
+  try{ speechSynthesis.cancel(); }catch(e){}
+  try{ hf.wl && hf.wl.release(); }catch(e){} hf.wl=null;
+  hfState("","Parado");
+  if(msg) hfMsg(msg);
+}
+// Fecha o ditado do teclado tirando o foco do campo. Sem isso o microfone
+// continua aberto e transcreve a própria fala do app.
+function saMute(){
+  sa.speaking=true;
+  clearTimeout(sa.timer);
+  try{ el("say").blur(); }catch(e){}
+  el("say").value="";
+}
+function saUnmute(){
+  sa.speaking=false;
+  el("say").value="";          // limpa qualquer eco que tenha escapado
+  hfState("pronto","Toque o microfone do teclado e fale a nota");
+  if(S.saFocus!=="0"){ try{ el("say").focus(); }catch(e){} }
+}
+function saSpeak(text){
+  saMute();
+  hfState("falando","Falando — microfone fechado");
+  speak(text, ()=>{ if(sa.on) saUnmute(); });
+}
+function saAsk(prefix){
+  if(!sa.on) return;
+  sa.ask=hfPrompt();
+  saSpeak((prefix||"")+sa.ask);
+}
+function saCommit(){
+  if(!sa.on) return;
+  clearTimeout(sa.timer);
+  const txt=el("say").value.trim();
+  if(!txt) return;
+  const r=interpret(txt);
+  saMute();   // fecha o microfone antes de qualquer fala
+  if(r.type==="unknown" || r.type==="empty"){
+    hfMsg(`Ouvi: <b>${txt.slice(0,60)}</b> — não virou nota.`);
+    saSpeak("Não entendi. "+sa.ask);
+    return;
+  }
+  if(r.type==="cmd" && r.cmd==="stop"){ saStop("Modo assistido parado."); return; }
+  hfMsg(`Ouvi: <b>${txt.slice(0,60)}</b>`);
+  quiet=true; handle(txt); quiet=false;
+  if(r.type!=="seq") hf.lastParcela=null;          // comando ou troca de parcela: reanuncia a parcela
+  if(lastEntry.completedP===S.npar && S.cur===S.npar && S.cursor===0){
+    saStop("Última parcela concluída. Vá em Histórico para finalizar a avaliação.");
+    speak("Avaliação concluída.", ()=>{});
+    return;
+  }
+  const dito = (r.type==="seq" && lastEntry.wrote) ? `${fmt(lastEntry.val)}. ` : "";
+  saAsk(dito);
+}
+el("say").addEventListener("input",()=>{
+  if(!sa.on) return;
+  if(sa.speaking){ el("say").value=""; return; }   // descarta o eco da própria fala do app
+  clearTimeout(sa.timer);
+  if(!el("say").value.trim()) return;
+  hfState("ouvindo","Ouvindo o ditado…");
+  sa.timer=setTimeout(saCommit, parseInt(S.saDelay||"1100",10));
+});
+el("hfBtn").onclick=()=>{ hf.on ? hfStop("Parado.") : hfStart(); };
+el("saBtn").onclick=()=>{ sa.on ? saStop("Parado.") : saStart(); };
+
+/* ============================ render ============================ */
+// atualiza só o destaque do cursor, sem redesenhar (não tira o foco do campo)
+function markCursor(){
+  document.querySelectorAll("#varRows .varrow").forEach((d,i)=> d.classList.toggle("cursor", i===S.cursor));
+}
+function flagFor(p,vid){
+  const now=(S.notes[p]||{})[vid], ant=(S.ant[p]||{})[vid];
+  if(now===undefined||ant===undefined||ant===null||now===null) return false;
+  return (now < ant - 10) || (now - ant > 40);
+}
+function render(){
+  el("protoLabel").textContent = S.proto || "—";
+  el("mAvaliador").textContent = S.avaliador || "—";
+  el("mData").textContent = S.data ? S.data.split("-").reverse().slice(0,2).join("/") : "—";
+  el("mFen").textContent = S.fen || "—";
+  const done = Object.keys(S.notes).filter(p=> S.vars.every(v=> (S.notes[p]||{})[v.id]!==undefined)).length;
+  el("mProg").textContent=done; el("mTotal").textContent=S.npar;
+  el("bar").style.width = (S.npar? (done/S.npar*100):0)+"%";
+  el("curPlot").textContent = S.cur;
+  el("demoBanner").hidden = !S.demo;
+
+  // linhas de variáveis
+  const box=el("varRows"); box.innerHTML="";
+  if(S.cursor>=S.vars.length || S.cursor<0) S.cursor=0;
+  S.vars.forEach((v,idx)=>{
+    const now=(S.notes[S.cur]||{})[v.id], ant=(S.ant[S.cur]||{})[v.id];
+    const d=document.createElement("div");
+    d.className="varrow"+(now!==undefined&&now!==null?" filled":"")+(flagFor(S.cur,v.id)?" flag":"")+(idx===S.cursor?" cursor":"");
+    d.innerHTML=`<span class="nm">${idx===S.cursor?'<i class="caret">▸</i>':""}${v.name}</span><span class="ant">${fmt(ant)}</span>`;
+    const inp=document.createElement("input");
+    inp.addEventListener("focus",()=>{ S.cursor=idx; markCursor(); });
+    inp.className="now num"; inp.type="text"; inp.inputMode="decimal";
+    inp.value = (now===undefined||now===null) ? "" : fmt(now);
+    inp.setAttribute("aria-label",v.name);
+    inp.id = "inp-"+v.id;
+    inp.addEventListener("change",()=>{
+      const raw=inp.value.replace(",",".").trim();
+      if(raw===""){ if(S.notes[S.cur]) delete S.notes[S.cur][v.id]; }
+      else{ const n=parseFloat(raw); if(isNaN(n)||n<0||n>100){ flash("Nota fora de 0–100.","err"); render(); return; }
+            S.notes[S.cur]=Object.assign({},S.notes[S.cur]||{}); S.notes[S.cur][v.id]=n; S.demo=false; }
+      save(); render();
+    });
+    d.appendChild(inp);
+    box.appendChild(d);
+  });
+
+  // chips
+  const ch=el("chips"); ch.innerHTML="";
+  for(let p=1;p<=S.npar;p++){
+    const row=S.notes[p]||{};
+    const k=S.vars.filter(v=>row[v.id]!==undefined&&row[v.id]!==null).length;
+    const b=document.createElement("button");
+    b.className="chip num"+(k===S.vars.length?" done":k>0?" part":"")+(p===S.cur?" cur":"");
+    b.textContent=p; b.onclick=()=>setPlot(p);
+    ch.appendChild(b);
+  }
+  if(activeTab==="ficha") renderTable();
+  if(activeTab==="exp") renderExport();
+  if(activeTab==="conf") renderAntGrid();
+  if(activeTab==="hist") renderHistTable();
+}
+
+function renderTable(){
+  const t=el("fichaTable");
+  let h="<thead><tr><th>Parcela</th>";
+  S.vars.forEach(v=>{ h+=`<th>${v.name}<br><span style="font-weight:400">ant.</span></th><th>${v.name}<br><span style="font-weight:400">agora</span></th>`; });
+  h+="</tr></thead><tbody>";
+  for(let p=1;p<=S.npar;p++){
+    h+=`<tr class="${p===S.cur?"cur":""}"><td class="num">${p}</td>`;
+    S.vars.forEach(v=>{
+      const ant=(S.ant[p]||{})[v.id], now=(S.notes[p]||{})[v.id];
+      h+=`<td class="ant">${fmt(ant)}</td><td><input data-p="${p}" data-v="${v.id}" inputmode="decimal" value="${(now===undefined||now===null)?"":fmt(now)}"></td>`;
+    });
+    h+="</tr>";
+  }
+  t.innerHTML=h+"</tbody>";
+  t.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("change",()=>{
+      const p=+inp.dataset.p, vid=inp.dataset.v, raw=inp.value.replace(",",".").trim();
+      if(raw===""){ if(S.notes[p]) delete S.notes[p][vid]; }
+      else{ const n=parseFloat(raw); if(isNaN(n)||n<0||n>100){ toast("Nota fora de 0–100"); renderTable(); return; }
+            S.notes[p]=Object.assign({},S.notes[p]||{}); S.notes[p][vid]=n; S.demo=false; }
+      save(); render();
+    });
+  });
+}
+
+/* ============================ exportação ============================ */
+function buildTSV(scope,onlyNow){
+  const lines=[];
+  const h=["Parcela"];
+  S.vars.forEach(v=>{ if(!onlyNow) h.push(v.name+" 1"); h.push(v.name+" 2"); });
+  lines.push(h.join("\t"));
+  for(let p=1;p<=S.npar;p++){
+    const row=S.notes[p]||{};
+    const filled=S.vars.some(v=>row[v.id]!==undefined&&row[v.id]!==null);
+    if(scope==="filled" && !filled) continue;
+    const c=[p];
+    S.vars.forEach(v=>{
+      if(!onlyNow){ const a=(S.ant[p]||{})[v.id]; c.push(a===undefined||a===null?"":String(a).replace(".",",")); }
+      const n=row[v.id]; c.push(n===undefined||n===null?"":String(n).replace(".",","));
+    });
+    lines.push(c.join("\t"));
+  }
+  return lines.join("\n");
+}
+function renderExport(){
+  el("expOut").value = buildTSV(el("expScope").value, false);
+  el("expHead").textContent =
+`Protocolo:\t${S.proto}
+Avaliador:\t${S.avaliador}
+Data:\t${S.data}
+Fenologia:\t${S.fen}
+Área Aval:\t${S.area}
+Data Aplic:\t${S.dataAp}
+Nº Aplic:\t${S.nap}`;
+}
+async function copyText(txt){
+  try{ await navigator.clipboard.writeText(txt); toast("Copiado"); }
+  catch(e){ const ta=el("expOut"); ta.focus(); ta.select(); toast("Selecione e copie manualmente"); }
+}
+
+/* ============================ avaliação anterior: grade + colagem ============================ */
+function isNumCell(c){ const s=String(c).trim(); return s!=="" && /^-?[\d.,]+$/.test(s) && !isNaN(parseFloat(s.replace(",","."))); }
+function splitRows(txt){
+  const sep = txt.includes("\t") ? "\t" : (txt.includes(";") ? ";" : null);
+  return txt.replace(/\r/g,"").split("\n").filter(r=>r.trim()!=="")
+            .map(r=> sep ? r.split(sep).map(c=>c.trim()) : r.trim().split(/\s+/));
+}
+// "Oídio 1", "Ferrugem anterior", "DFC's" -> id da variável
+function varFromHeader(txt){
+  const t=norm(txt).replace(/\b(anterior|anteriores|ant|atual|agora|momento|severidade|nota|notas)\b/g," ")
+                   .replace(/\b[12]\b/g," ").replace(/\s+/g," ").trim();
+  if(!t) return null;
+  let best=null;
+  S.vars.forEach(v=>{
+    [v.name, ...v.aliases.split(",")].map(x=>norm(x.trim())).filter(Boolean).forEach(a=>{
+      if(t===a || t.includes(a) || a.includes(t)){
+        const sc=Math.min(t.length,a.length);
+        if(!best || sc>best.sc) best={id:v.id,sc};
+      }
+    });
+  });
+  return best ? best.id : null;
+}
+function headerMap(cells){
+  const parcelaRe=/^(parcela|parcelas|parc|plot|unidade|up)\b|^n{0,2} ?parcela/;
+  const cand=cells.map(c=>{
+    const t=norm(c);
+    if(parcelaRe.test(t)) return {k:"p"};
+    const id=varFromHeader(c);
+    if(!id) return null;
+    const suf = /\b1\b|anterior|\bant\b/.test(t) ? 1 : (/\b2\b|agora|atual|momento/.test(t) ? 2 : 0);
+    return {k:"v", id, suf};
+  });
+  // mesma doença em duas colunas (1 e 2): fica a "1"/anterior
+  const chosen={};
+  cand.forEach((m,i)=>{
+    if(!m||m.k!=="v") return;
+    const prev=chosen[m.id];
+    if(prev===undefined){ chosen[m.id]=i; return; }
+    const rank=x=>x.suf===1?0:(x.suf===0?1:2);
+    if(rank(m)<rank(cand[prev])){ cand[prev]=null; chosen[m.id]=i; } else { cand[i]=null; }
+  });
+  return cand;
+}
+function applyPastedBlock(txt,startP,startV){
+  const rows=splitRows(txt);
+  if(!rows.length) return "Nada para colar.";
+  const startIdx=Math.max(0,S.vars.findIndex(v=>v.id===startV));
+  let map=null, named=[], parcelaCol=-1, body=rows;
+  // o cabeçalho pode estar na 1ª ou na 2ª linha (fichas com duas linhas de título)
+  for(let h=0; h<Math.min(2,rows.length); h++){
+    if(rows[h].every(isNumCell)) break;
+    const m=headerMap(rows[h]);
+    if(m.some(x=>x&&x.k==="v")){
+      map=m; body=rows.slice(h+1);
+      parcelaCol=m.findIndex(x=>x&&x.k==="p");
+      named=m.filter(x=>x&&x.k==="v").map(x=>S.vars.find(v=>v.id===x.id).name);
+      break;
+    }
+  }
+  if(!map){
+    const ncol=Math.max.apply(null, rows.map(r=>r.length));
+    const firstIsP = (ncol===S.vars.length+1 && startIdx===0);
+    map=[];
+    for(let c=0;c<ncol;c++){
+      if(firstIsP && c===0){ map.push({k:"p"}); continue; }
+      const vi=startIdx + (firstIsP ? c-1 : c);
+      map.push(vi<S.vars.length ? {k:"v", id:S.vars[vi].id} : null);
+    }
+    parcelaCol = firstIsP ? 0 : -1;
+  }
+  body = body.filter(r=>r.some(isNumCell));
+  let n=0, fora=0;
+  body.forEach((cells,ri)=>{
+    const p = parcelaCol>=0 ? parseInt(String(cells[parcelaCol]||"").replace(/[^\d]/g,""),10) : startP+ri;
+    if(!p || p<1 || p>S.npar){ fora++; return; }
+    let wrote=false;
+    cells.forEach((c,ci)=>{
+      const m=map[ci]; if(!m||m.k!=="v") return;
+      const raw=String(c==null?"":c).replace(",",".").trim();
+      if(raw==="") return;
+      const val=parseFloat(raw);
+      if(isNaN(val)||val<0||val>100) return;
+      S.ant[p]=Object.assign({},S.ant[p]||{}); S.ant[p][m.id]=val; wrote=true;
+    });
+    if(wrote) n++;
+  });
+  if(!n) return "Nenhuma linha válida — confira se há coluna de parcela e notas de 0 a 100.";
+  const extra = named.length ? ` Colunas reconhecidas: ${named.join(", ")}.` : " Colunas lidas pela posição (sem cabeçalho).";
+  return `${n} parcelas preenchidas.${extra}` + (fora ? ` ${fora} linha(s) fora de 1–${S.npar} ignorada(s).` : "");
+}
+function onAntPaste(e){
+  const dt = e.clipboardData || window.clipboardData;
+  const txt = dt ? dt.getData("text") : "";
+  if(!txt || !/[\t\n;]|\s/.test(txt.trim())) return;   // valor único: deixa colar normalmente
+  e.preventDefault();
+  el("impMsg").textContent = applyPastedBlock(txt, +e.target.dataset.p, e.target.dataset.v);
+  save(); render(); renderAntGrid();
+}
+function renderAntGrid(){
+  const t=el("antTable"); if(!t) return;
+  let h="<thead><tr><th>Parcela</th>";
+  S.vars.forEach(v=>{ h+=`<th>${v.name}</th>`; });
+  h+="</tr></thead><tbody>";
+  for(let p=1;p<=S.npar;p++){
+    h+=`<tr><td class="num">${p}</td>`;
+    S.vars.forEach(v=>{
+      const a=(S.ant[p]||{})[v.id];
+      h+=`<td><input data-p="${p}" data-v="${v.id}" inputmode="decimal" value="${(a===undefined||a===null)?"":fmt(a)}"></td>`;
+    });
+    h+="</tr>";
+  }
+  t.innerHTML=h+"</tbody>";
+  t.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("paste", onAntPaste);
+    inp.addEventListener("change",()=>{
+      const p=+inp.dataset.p, vid=inp.dataset.v, raw=inp.value.replace(",",".").trim();
+      if(raw===""){ if(S.ant[p]){ delete S.ant[p][vid]; if(!Object.keys(S.ant[p]).length) delete S.ant[p]; } }
+      else{ const n=parseFloat(raw); if(isNaN(n)||n<0||n>100){ toast("Nota fora de 0–100"); renderAntGrid(); return; }
+            S.ant[p]=Object.assign({},S.ant[p]||{}); S.ant[p][vid]=n; }
+      save(); render();
+    });
+  });
+}
+
+/* ============================ histórico de avaliações ============================ */
+// lista de variáveis já vistas (atuais + só históricas), sem duplicar
+function allVars(){
+  const out=S.vars.map(v=>({id:v.id,name:v.name,code:v.code}));
+  S.hist.forEach(h=> (h.vars||[]).forEach(v=>{ if(!out.some(o=>o.id===v.id)) out.push({id:v.id,name:v.name,code:v.code}); }));
+  return out;
+}
+// avaliações que têm pelo menos uma nota dessa variável, na ordem em que foram feitas
+function seriesFor(vid, includeCurrent){
+  const cols=[];
+  S.hist.forEach((h,i)=>{
+    const has=Object.keys(h.notes||{}).some(p=> h.notes[p][vid]!==undefined && h.notes[p][vid]!==null);
+    if(has) cols.push({src:h, notes:h.notes, data:h.data, fen:h.fen, nap:h.nap, dataAp:h.dataAp,
+                       avaliador:h.avaliador, area:h.area, n:i+1, aberta:false});
+  });
+  if(includeCurrent){
+    const has=Object.keys(S.notes).some(p=> S.notes[p][vid]!==undefined && S.notes[p][vid]!==null);
+    if(has) cols.push({notes:S.notes, data:S.data, fen:S.fen, nap:S.nap, dataAp:S.dataAp,
+                       avaliador:S.avaliador, area:S.area, n:S.hist.length+1, aberta:true});
+  }
+  return cols;
+}
+function dmy(d){ return d ? d.split("-").reverse().join("/") : ""; }
+
+function renderHistVars(){
+  const sel=el("histVar"); if(!sel) return;
+  const cur=sel.value;
+  sel.innerHTML=allVars().map(v=>`<option value="${v.id}">${v.name}</option>`).join("");
+  if(cur && [...sel.options].some(o=>o.value===cur)) sel.value=cur;
+  renderHistTable();
+}
+function renderHistTable(){
+  const t=el("histTable"); if(!t) return;
+  const vid=el("histVar").value || (allVars()[0]||{}).id;
+  const v=allVars().find(x=>x.id===vid);
+  if(!v){ t.innerHTML=""; return; }
+  const cols=seriesFor(vid,true);
+  if(!cols.length){ t.innerHTML=`<tbody><tr><td style="text-align:left;color:var(--fg-dim)">Nenhuma avaliação de ${v.name} ainda.</td></tr></tbody>`; return; }
+  const npar=Math.max(S.npar, ...S.hist.map(h=>h.npar||0));
+  let h=`<thead><tr><th>Parcela</th>${cols.map((c,i)=>
+    `<th>${v.code}-${i+1}<br><span style="font-weight:400;text-transform:none">${dmy(c.data)}${c.aberta?" (aberta)":""}</span></th>`).join("")}</tr></thead><tbody>`;
+  for(let p=1;p<=npar;p++){
+    const cells=cols.map(c=>{ const x=(c.notes[p]||{})[vid]; return `<td class="num">${(x===undefined||x===null)?"":fmt(x)}</td>`; });
+    if(cells.every(c=>c==='<td class="num"></td>')) continue;
+    h+=`<tr><td class="num">${p}</td>${cells.join("")}</tr>`;
+  }
+  t.innerHTML=h+"</tbody>";
+}
+function renderHistList(){
+  const box=el("histList"); if(!box) return;
+  if(!S.hist.length){ box.innerHTML=`<p class="tiny muted" style="margin:0">Nenhuma avaliação arquivada. Lance as notas na aba Avaliar e volte aqui para finalizar.</p>`; return; }
+  box.innerHTML="";
+  S.hist.forEach((h,i)=>{
+    const np=Object.keys(h.notes||{}).length;
+    const doencas=(h.vars||[]).filter(v=>Object.keys(h.notes||{}).some(p=>h.notes[p][v.id]!==undefined)).map(v=>v.name).join(", ");
+    const d=document.createElement("div"); d.className="histitem";
+    d.innerHTML=`<span class="n">${i+1}</span>
+      <span class="d"><b>${dmy(h.data)||"sem data"}</b>${h.fen?" · "+h.fen:""}${h.nap!==""&&h.nap!=null?" · "+h.nap+"ª aplic":""}
+      <br>${np} parcelas · ${doencas||"—"}</span>`;
+    const b=document.createElement("button"); b.textContent="Remover"; let armed=false;
+    b.onclick=()=>{
+      if(!armed){ armed=true; b.textContent="Confirmar?"; setTimeout(()=>{armed=false;b.textContent="Remover";},5000); return; }
+      S.hist.splice(i,1); save(); renderHist(); el("histMsg").textContent="Avaliação removida do histórico.";
+    };
+    d.appendChild(b); box.appendChild(d);
+  });
+}
+function renderHist(){ renderHistList(); renderHistVars(); }
+
+/* ============================ escrita de .xlsx (ZIP sem compressão) ============================ */
+const CRC_T=(()=>{const t=new Uint32Array(256);
+  for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0;}
+  return t;})();
+function crc32(u8){ let c=0xFFFFFFFF; for(let i=0;i<u8.length;i++) c=CRC_T[(c^u8[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function zipStore(files){
+  const enc=new TextEncoder(), parts=[], cen=[];
+  let off=0, n=0;
+  files.forEach(f=>{
+    const name=enc.encode(f.name), data=f.data, crc=crc32(data);
+    const lh=new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true); lh.setUint16(4,20,true);
+    lh.setUint32(14,crc,true); lh.setUint32(18,data.length,true); lh.setUint32(22,data.length,true);
+    lh.setUint16(26,name.length,true);
+    parts.push(new Uint8Array(lh.buffer),name,data);
+    const ch=new DataView(new ArrayBuffer(46));
+    ch.setUint32(0,0x02014b50,true); ch.setUint16(4,20,true); ch.setUint16(6,20,true);
+    ch.setUint32(16,crc,true); ch.setUint32(20,data.length,true); ch.setUint32(24,data.length,true);
+    ch.setUint16(28,name.length,true); ch.setUint32(42,off,true);
+    cen.push(new Uint8Array(ch.buffer),name);
+    off += 30+name.length+data.length; n++;
+  });
+  const cenSize=cen.reduce((a,b)=>a+b.length,0);
+  const eo=new DataView(new ArrayBuffer(22));
+  eo.setUint32(0,0x06054b50,true); eo.setUint16(8,n,true); eo.setUint16(10,n,true);
+  eo.setUint32(12,cenSize,true); eo.setUint32(16,off,true);
+  return new Blob([...parts,...cen,new Uint8Array(eo.buffer)],
+                  {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+function xe(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function colName(i){ let s=""; i++; while(i>0){ const m=(i-1)%26; s=String.fromCharCode(65+m)+s; i=Math.floor((i-1)/26); } return s; }
+function sheetXml(rows){ // rows: array de arrays; célula = null | number | string
+  let x=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+        `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>`;
+  rows.forEach((cells,ri)=>{
+    if(!cells || !cells.some(c=>c!==null&&c!==undefined&&c!=="")) return;
+    x+=`<row r="${ri+1}">`;
+    cells.forEach((c,ci)=>{
+      if(c===null||c===undefined||c==="") return;
+      const ref=colName(ci)+(ri+1);
+      if(typeof c==="number" && isFinite(c)) x+=`<c r="${ref}"><v>${c}</v></c>`;
+      else x+=`<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xe(c)}</t></is></c>`;
+    });
+    x+=`</row>`;
+  });
+  return x+`</sheetData></worksheet>`;
+}
+function safeSheetName(n,used){
+  let s=String(n).replace(/[\\\/\?\*\[\]:]/g,"-").slice(0,31).trim() || "Planilha";
+  let b=s, k=2; while(used.has(s.toLowerCase())){ s=(b.slice(0,28)+"("+k+")"); k++; }
+  used.add(s.toLowerCase()); return s;
+}
+function buildXlsx(scope){
+  const includeCurrent = scope!=="hist";
+  const vars=allVars().filter(v=>seriesFor(v.id,includeCurrent).length>0);
+  if(!vars.length) throw new Error("não há avaliações para exportar");
+  const used=new Set(), sheets=[];
+  vars.forEach(v=>{
+    const cols=seriesFor(v.id,includeCurrent);
+    const npar=Math.max(S.npar, ...S.hist.map(h=>h.npar||0));
+    const rows=[];
+    rows[0]=[S.proto];
+    rows[2]=["Avaliador:", ...cols.map(c=>c.avaliador||"")];
+    rows[3]=["Data:",      ...cols.map(c=>dmy(c.data))];
+    rows[4]=["Fenologia:", ...cols.map(c=>c.fen||"")];
+    rows[5]=["Área Aval:", ...cols.map(c=>c.area||"")];
+    rows[6]=["Data Aplic:",...cols.map(c=>dmy(c.dataAp))];
+    rows[7]=["Nº Aplic:",  ...cols.map(c=>c.nap===""||c.nap==null?"":Number(c.nap))];
+    rows[9]=["Parcela",    ...cols.map((c,i)=>`${v.code}-${i+1}`)];
+    for(let p=1;p<=npar;p++){
+      rows[9+p]=[p, ...cols.map(c=>{ const x=(c.notes[p]||{})[v.id]; return (x===undefined||x===null)?"":x; })];
+    }
+    sheets.push({name:safeSheetName(v.name,used), xml:sheetXml(rows)});
+  });
+  const enc=new TextEncoder(), U=s=>enc.encode(s);
+  const files=[
+    {name:"[Content_Types].xml", data:U(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">`+
+      `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>`+
+      `<Default Extension="xml" ContentType="application/xml"/>`+
+      `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>`+
+      sheets.map((s,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")+
+      `</Types>`)},
+    {name:"_rels/.rels", data:U(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`+
+      `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>`+
+      `</Relationships>`)},
+    {name:"xl/workbook.xml", data:U(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+      `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>`+
+      sheets.map((s,i)=>`<sheet name="${xe(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join("")+
+      `</sheets></workbook>`)},
+    {name:"xl/_rels/workbook.xml.rels", data:U(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`+
+      sheets.map((s,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join("")+
+      `</Relationships>`)}
+  ];
+  sheets.forEach((s,i)=> files.push({name:`xl/worksheets/sheet${i+1}.xml`, data:U(s.xml)}));
+  return {blob:zipStore(files), sheets:sheets.map(s=>s.name)};
+}
+// dentro do Claude o download passa pela permissão do visualizador; no arquivo salvo, pelo navegador
+let dlCap;
+async function getDl(){
+  if(dlCap!==undefined) return dlCap;
+  try{ dlCap = (window.claude && window.claude.use) ? await window.claude.use("downloads") : null; }
+  catch(e){ dlCap = null; }
+  return dlCap;
+}
+async function downloadXlsx(scope){
+  const {blob,sheets}=buildXlsx(scope);
+  const fname=`${(S.proto||"ensaio").replace(/[^\w-]+/g,"_")}_avaliacoes_${S.data||""}.xlsx`;
+  const resumo=`${sheets.length} aba(s): ${sheets.join(", ")}.`;
+  const cap=await getDl();
+  if(cap){
+    try{ await cap.save({filename:fname, data:blob}); return `Arquivo salvo — ${resumo}`; }
+    catch(err){
+      const c=err&&err.code;
+      if(c==="declined") return "Download cancelado.";
+      if(c==="rate_limited") return "Já há um pedido de download aberto. Tente de novo em instantes.";
+      // qualquer outro caso: tenta pelo navegador
+    }
+  }
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a"); a.href=url; a.download=fname;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 2000);
+  return `Gerado — ${resumo}`;
+}
+
+/* ============================ editor de variáveis ============================ */
+function renderVarEditor(){
+  const box=el("varEditor"); box.innerHTML="";
+  S.vars.forEach((v,i)=>{
+    const d=document.createElement("div"); d.className="varedit";
+    d.innerHTML=`<input value="${v.name}" aria-label="Nome"><input value="${v.code||""}" aria-label="Código" placeholder="CÓDIGO"><input value="${v.aliases}" aria-label="Apelidos">
+      <button title="Subir">↑</button><button title="Remover">×</button>`;
+    const [nm,cd,al,up,rm]=d.querySelectorAll("input,button");
+    nm.onchange=()=>{ v.name=nm.value||v.name; save(); render(); renderHistVars(); };
+    cd.onchange=()=>{ v.code=(cd.value||"").toUpperCase().trim()||v.code; cd.value=v.code; save(); };
+    al.onchange=()=>{ v.aliases=al.value; save(); };
+    up.onclick=()=>{ if(i>0){ const t=S.vars[i-1]; S.vars[i-1]=S.vars[i]; S.vars[i]=t; save(); renderVarEditor(); render(); } };
+    rm.onclick=()=>{ if(S.vars.length>1){ S.vars.splice(i,1); save(); renderVarEditor(); render(); } };
+    box.appendChild(d);
+  });
+}
+
+/* ============================ ajustes <-> estado ============================ */
+function bindConfig(){
+  const map=[["cProto","proto"],["cAval","avaliador"],["cData","data"],["cFen","fen"],["cArea","area"],
+             ["cDataAp","dataAp"],["cNap","nap"],["cNpar","npar"],["cTts","tts"],["cRate","rate"],
+             ["cAuto","auto"],["cWake","wake"],["cHfAnt","hfAnt"],["cHfBeep","hfBeep"],["cSaDelay","saDelay"],["cSaFocus","saFocus"]];
+  map.forEach(([id,key])=>{
+    const e=el(id); if(!e) return;
+    e.value = S[key];
+    e.addEventListener("change",()=>{
+      S[key] = (key==="npar") ? Math.max(1,Math.min(150,parseInt(e.value||"1",10))) : e.value;
+      if(key==="npar") e.value=S.npar;
+      if(key==="wake") setupWake();
+      save(); render();
+    });
+  });
+}
+
+/* ============================ tela ligada ============================ */
+let wl=null;
+async function setupWake(){
+  try{
+    if(S.wake==="1" && "wakeLock" in navigator && document.visibilityState==="visible"){
+      if(!wl) wl = await navigator.wakeLock.request("screen");
+    } else if(wl){ await wl.release(); wl=null; }
+  }catch(e){ wl=null; }
+}
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"){ wl=null; setupWake(); } });
+
+/* ============================ eventos ============================ */
+function submitSay(){
+  if(sa.on){ saCommit(); return; }
+  const v=el("say").value;
+  if(!v.trim()) return;
+  handle(v);
+  el("say").value="";
+  el("say").focus();
+}
+el("sendBtn").onclick=submitSay;
+el("say").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); submitSay(); } });
+document.querySelectorAll(".quick button").forEach(b=> b.onclick=()=>{
+  if(sa.on){ clearTimeout(sa.timer); quiet=true; handle(b.dataset.cmd); quiet=false; hf.lastParcela=null; saAsk(); }
+  else handle(b.dataset.cmd);
+  el("say").focus();
+});
+el("prevPlot").onclick=()=>setPlot(S.cur-1);
+el("nextPlot").onclick=()=>setPlot(S.cur+1);
+el("copyAll").onclick=()=>{ renderExport(); copyText(buildTSV(el("expScope").value,false)); };
+el("copyNow").onclick=()=>copyText(buildTSV(el("expScope").value,true));
+el("expScope").onchange=renderExport;
+el("impClear").onclick=()=>{ S.ant={}; save(); render(); renderAntGrid(); el("impMsg").textContent="Avaliações anteriores apagadas."; };
+let finArmed=false;
+el("finalizar").onclick=function(){
+  const n=Object.keys(S.notes).length;
+  if(!n){ el("histMsg").textContent="Não há notas lançadas para arquivar."; return; }
+  if(!finArmed){
+    finArmed=true; this.textContent=`Confirmar: arquivar ${n} parcelas?`; this.classList.remove("primary"); this.classList.add("danger");
+    setTimeout(()=>{ finArmed=false; this.textContent="Finalizar avaliação"; this.classList.remove("danger"); this.classList.add("primary"); },6000);
+    return;
+  }
+  finArmed=false; this.textContent="Finalizar avaliação"; this.classList.remove("danger"); this.classList.add("primary");
+  S.hist.push({
+    id:Date.now(), data:S.data, fen:S.fen, nap:S.nap, dataAp:S.dataAp,
+    avaliador:S.avaliador, area:S.area, npar:S.npar,
+    notes:JSON.parse(JSON.stringify(S.notes)),
+    vars:S.vars.map(v=>({id:v.id,name:v.name,code:v.code}))
+  });
+  S.ant=JSON.parse(JSON.stringify(S.notes));
+  S.notes={}; S.cur=1; S.demo=false; undoStack=[];
+  save(); render(); renderHist(); renderAntGrid();
+  el("histMsg").textContent=`Avaliação ${S.hist.length} arquivada com ${n} parcelas. A ficha está limpa e as notas viraram a coluna “anterior”.`;
+};
+el("histVar").onchange=renderHistTable;
+el("xlsxBtn").onclick=async ()=>{
+  const msg=el("xlsxMsg"); msg.textContent="Gerando…";
+  try{ msg.textContent = await downloadXlsx(el("xlsxScope").value); }
+  catch(err){ msg.textContent="Não foi possível gerar o arquivo: "+((err&&err.message)||err); }
+};
+el("addVar").onclick=()=>{ S.vars.push({id:"v"+Date.now(),name:"Nova variável",code:"VAR",aliases:""}); save(); renderVarEditor(); render(); };
+el("clearDemo").onclick=()=>{ S.notes={}; S.ant={}; S.demo=false; S.cur=1; save(); render(); };
+el("resetNotes").onclick=()=>{ S.notes={}; S.cur=1; S.demo=false; undoStack=[]; save(); render(); toast("Notas zeradas"); };
+el("resetAll").onclick=()=>{ try{localStorage.removeItem(KEY);}catch(e){} location.reload(); };
+
+document.querySelectorAll(".tabs button").forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll(".tabs button").forEach(x=>x.setAttribute("aria-selected", x===b ? "true":"false"));
+    activeTab=b.dataset.tab;
+    ["aval","ficha","hist","exp","drive","conf"].forEach(t=> el("tab-"+t).hidden = (t!==activeTab));
+    el("entrybar").hidden = (activeTab!=="aval");
+    if(activeTab==="exp") renderExport();
+    if(activeTab==="ficha") renderTable();
+    if(activeTab==="conf") renderAntGrid();
+    if(activeTab==="hist") renderHist();
+  };
+});
+
+/* ============================ início ============================ */
+function seedDemo(){
+  S.ant = {1:{v1:2,v2:5,v3:8,v4:0,v5:10}, 2:{v1:0,v2:3,v3:6,v4:0,v5:8}, 3:{v1:5,v2:12,v3:10,v4:0,v5:15}};
+  S.notes = {1:{v1:5,v2:10,v3:12,v4:0,v5:20}, 2:{v1:2,v2:8,v3:9,v4:0,v5:15}, 3:{v1:8,v2:18,v3:14,v4:0,v5:25}};
+  S.cur=4; S.demo=true;
+}
+if(!load()){ seedDemo(); migrate(); }
+bindConfig(); renderVarEditor(); renderHistVars(); render(); setupWake(); hfState("","Parado");
+if(!hasSR()) hfMsg("Este navegador não tem reconhecimento de voz — a avaliação guiada não vai funcionar aqui. O ditado do teclado continua disponível.");
+el("say").focus();
+</script>
+
+<script src="./drive-sync.js"></script>
+</body>
+</html>
