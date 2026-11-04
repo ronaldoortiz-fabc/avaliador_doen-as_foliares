@@ -391,11 +391,12 @@ code{font-family:var(--font-num);background:var(--surface-2);padding:1px 5px;bor
       <div class="row wrap">
         <button class="btn primary" id="driveConnect">Conectar Google</button>
         <button class="btn" id="driveSync">Sincronizar agora</button>
+        <button class="btn" id="driveExcelOnly">Enviar Excel ao Drive</button>
         <button class="btn" id="driveRestore">Restaurar do Drive</button>
       </div>
       <p id="driveStatus" class="tiny muted" role="status" aria-live="polite" style="margin:10px 0 0">Drive desconectado. As avaliações continuam salvas localmente.</p>
       <p id="driveSyncInfo" class="tiny muted" style="margin:6px 0 0"></p>
-      <p class="tiny muted">Ao sincronizar, o aplicativo salva <b>um JSON e um Excel separados para cada ensaio</b> no Drive.</p>
+      <p class="tiny muted">Ao sincronizar, o aplicativo tenta salvar <b>um JSON e um Excel separados para cada ensaio</b> no Drive. Se aparecer só JSON, use <b>Enviar Excel ao Drive</b> para repetir apenas a planilha, sem modificar o JSON.</p>
       <div class="row wrap" style="margin-top:10px">
         <button class="btn" id="driveList">Listar ensaios do Drive</button>
         <select id="driveRemoteList" aria-label="Ensaios no Google Drive" style="max-width:100%;min-width:190px;padding:8px"></select>

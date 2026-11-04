@@ -115,6 +115,20 @@
     if(remote) await updateBinary(remote.id,excel);
     else await createBinary(name,excel,await getFolder(true));
   }
+  async function syncExcelOnly(){
+    if(busy) return;
+    busy=true;
+    const protocol=safeProto();
+    try{
+      requireAuth();
+      if(S.demo) throw Error('Remova os dados de demonstração antes de enviar o Excel.');
+      status('Gerando e enviando Excel do protocolo '+protocol+'...');
+      await uploadExcel(protocol);
+      status('Excel enviado com sucesso: '+protocol+'_avaliacoes.xlsx. Confira na pasta do Drive.');
+    }catch(e){
+      status('Falha ao enviar Excel: '+(e.message||String(e))+'. As avaliações JSON não foram alteradas.',true);
+    }finally{busy=false;showInfo();}
+  }
   async function updateJson(fileId, content) {
     const r = await driveFetch(UPLOAD+'/'+encodeURIComponent(fileId)+'?uploadType=media&fields=id,name,md5Checksum,modifiedTime', {
       method:'PATCH',headers:{'Content-Type':'application/json; charset=UTF-8'},body:content
@@ -193,12 +207,15 @@
       // JSON e Excel independentes no Drive, sob o mesmo protocolo.
       // Se Excel falhar, o JSON permanece salvo e a falha e reportada.
       let excelOk=false;
+      let excelError='';
       try { await uploadExcel(localProtocol);excelOk=true; }
-      catch(e){ status('JSON enviado, mas houve falha no Excel: '+e.message,true); }
+      catch(e){ excelError=e.message||String(e); }
       // Alterações feitas durante envio continuam pendentes, sem dizer que já foram sincronizadas.
       if (safeProto() === localProtocol) {
-        setLocalMeta({fileId:result.id, md5:result.md5Checksum, syncedAt:new Date().toISOString()});
-        if (envelope().replace(/"exportadoEm":"[^"]+"/, '"exportadoEm":null')
+        setLocalMeta({fileId:result.id, md5:result.md5Checksum, syncedAt:excelOk?new Date().toISOString():(meta.syncedAt||null)});
+        if (!excelOk) {
+          status('JSON salvo no Drive, mas Excel NAO enviado: '+excelError+'. Use Enviar Excel ao Drive para tentar novamente.',true);
+        } else if (envelope().replace(/"exportadoEm":"[^"]+"/, '"exportadoEm":null')
             !== snapshot.replace(/"exportadoEm":"[^"]+"/, '"exportadoEm":null')) {
           status('Cópia enviada, mas houve novas alterações locais. Sincronize novamente.');
         } else if(excelOk) status('Sincronizacao concluida: JSON e Excel deste ensaio salvos no Drive.');
@@ -300,6 +317,7 @@
   byId('driveImportProject').onclick=importRemoteProject;
   byId('driveConnect').onclick=connect;
   byId('driveSync').onclick=()=>sync(false);
+  byId('driveExcelOnly').onclick=syncExcelOnly;
   byId('driveRestore').onclick=restoreRemote;
   byId('driveOverwrite').onclick=forceSync;
   byId('backupDownload').onclick=backupLocal;

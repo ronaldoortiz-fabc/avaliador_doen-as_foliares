@@ -1,3 +1,13 @@
+# Correção de envio do Excel — atualização
+
+Esta versão acrescenta o botão **Drive > Enviar Excel ao Drive**. Ele gera novamente a planilha do protocolo selecionado e a envia sem sobrescrever as avaliações JSON. Se houver falha, a aba Drive apresenta a mensagem de erro do Google. Também corrige a mensagem de conclusão, que só confirma ambos os arquivos quando o Excel realmente foi enviado.
+
+**Para atualizar:** faça backup JSON dos ensaios, substitua na raiz do GitHub os arquivos `index.html`, `drive-sync.js` e `sw.js`, sem mudar os demais. Não apague os arquivos no Google Drive. Atualize o navegador com internet (às vezes são necessários dois recarregamentos por causa do cache offline). Entre em Drive, conecte sua conta e clique em **Enviar Excel ao Drive**. Confira `<PROTOCOLO>_avaliacoes.xlsx` na pasta `Avaliacoes_Fitopatologia`.
+
+**Se falhar:** copie a mensagem exibida em vermelho na aba Drive para diagnóstico. O arquivo JSON não é alterado por essa operação.
+
+---
+
 # Avaliações Fitopatológicas — vários ensaios independentes
 
 ## O que mudou
