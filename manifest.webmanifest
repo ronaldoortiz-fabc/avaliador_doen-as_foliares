@@ -1,6 +1,6 @@
 {
-  "name": "Ficha de Voz - Avaliação Fitopatológica",
-  "short_name": "Ficha de Voz",
+  "name": "Avaliações Fitopatológicas - Meus Ensaios",
+  "short_name": "Fitopatologia",
   "description": "Avaliações fitopatológicas por voz com armazenamento offline e sincronização Google Drive",
   "id": "./index.html",
   "start_url": "./index.html",

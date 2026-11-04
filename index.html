@@ -256,6 +256,10 @@ code{font-family:var(--font-num);background:var(--surface-2);padding:1px 5px;bor
       <span><b id="mProg">0</b>/<b id="mTotal">0</b></span>
     </div>
   </div>
+  <div class="row wrap" style="justify-content:space-between;padding-top:7px">
+    <button class="btn" id="ensaiosBtn" type="button">☷ Meus ensaios</button>
+    <span id="ensaiosAtual" class="tiny muted" aria-live="polite"></span>
+  </div>
   <div class="progress"><i id="bar"></i></div>
   <nav class="tabs" role="tablist">
     <button role="tab" id="tb-aval" aria-selected="true" data-tab="aval">Avaliar</button>
@@ -391,6 +395,12 @@ code{font-family:var(--font-num);background:var(--surface-2);padding:1px 5px;bor
       </div>
       <p id="driveStatus" class="tiny muted" role="status" aria-live="polite" style="margin:10px 0 0">Drive desconectado. As avaliações continuam salvas localmente.</p>
       <p id="driveSyncInfo" class="tiny muted" style="margin:6px 0 0"></p>
+      <p class="tiny muted">Ao sincronizar, o aplicativo salva <b>um JSON e um Excel separados para cada ensaio</b> no Drive.</p>
+      <div class="row wrap" style="margin-top:10px">
+        <button class="btn" id="driveList">Listar ensaios do Drive</button>
+        <select id="driveRemoteList" aria-label="Ensaios no Google Drive" style="max-width:100%;min-width:190px;padding:8px"></select>
+        <button class="btn" id="driveImportProject">Recuperar ensaio selecionado</button>
+      </div>
       <div class="row wrap" style="margin-top:10px">
         <button class="btn" id="driveOverwrite">Substituir cópia remota (com backup)</button>
         <button class="btn" id="driveOpen">Abrir pasta no Drive</button>
@@ -413,7 +423,7 @@ code{font-family:var(--font-num);background:var(--surface-2);padding:1px 5px;bor
     <fieldset>
       <legend>Identificação</legend>
       <div class="grid2">
-        <label class="f">Protocolo<input id="cProto" placeholder="FP26PR_SO132"></label>
+        <label class="f">Protocolo<input id="cProto" readonly title="O codigo do protocolo e definido ao criar o ensaio"></label>
         <label class="f">Avaliador<input id="cAval" placeholder="Nome"></label>
         <label class="f">Data<input id="cData" type="date"></label>
         <label class="f">Fenologia<input id="cFen" placeholder="R5.3"></label>
@@ -512,11 +522,45 @@ code{font-family:var(--font-num);background:var(--surface-2);padding:1px 5px;bor
 </div>
 
 <div class="toast" id="toast"></div>
+<div id="ensaiosOverlay" hidden role="dialog" aria-modal="true" aria-label="Meus ensaios" style="position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.62);overflow-y:auto;padding:22px 12px">
+  <div class="card" style="max-width:650px;margin:2vh auto;padding:20px">
+    <div class="row" style="justify-content:space-between"><h2>Meus ensaios</h2><button id="ensaiosFechar" class="btn">Fechar</button></div>
+    <p class="tiny muted">Cada ensaio tem notas, avaliadores, variaveis, historico e backup independentes. Clique para abrir.</p>
+    <div id="ensaiosLista" style="display:grid;gap:8px;margin:14px 0"></div>
+    <fieldset><legend>Criar novo ensaio</legend>
+      <div class="grid2">
+        <label class="f">Codigo do protocolo<input id="ensaioNovoCodigo" placeholder="FP26PR_SO10" maxlength="90" autocomplete="off"></label>
+        <label class="f">Numero de parcelas<input id="ensaioNovoNpar" type="number" min="1" max="150" value="48"></label>
+      </div>
+      <button id="ensaioCriar" class="btn primary" style="margin-top:10px">+ Criar e abrir</button>
+      <p id="ensaiosMsg" role="status" class="tiny muted"></p>
+    </fieldset>
+  </div>
+</div>
 
 <script>
 "use strict";
 /* ============================ estado ============================ */
-const KEY = "fichaVoz.v2";
+/* Cada protocolo tem chave local propria. O legado e preservado sem exclusao. */
+const REGISTRY_KEY = 'fichaVoz.multi.registry.v1';
+const ACTIVE_KEY = 'fichaVoz.multi.active.v1';
+function protoId(v){ return String(v||'').trim().toUpperCase().replace(/[^A-Z0-9_-]/g,'_').slice(0,90); }
+function bootstrapRegistry(){
+  let registry;
+  try { registry=JSON.parse(localStorage.getItem(REGISTRY_KEY)||'null'); } catch(e) {}
+  if(!Array.isArray(registry) || !registry.length){
+    let old; try { old=JSON.parse(localStorage.getItem('fichaVoz.v2')||'null'); } catch(e) {}
+    const code=protoId(old?.proto || 'FP26PR_SO09') || 'FP26PR_SO09';
+    registry=[code];
+    if(old && old.vars) localStorage.setItem('fichaVoz.multi.state:'+code,JSON.stringify({...old,proto:code}));
+    localStorage.setItem(REGISTRY_KEY,JSON.stringify(registry));
+    localStorage.setItem(ACTIVE_KEY,code);
+  }
+  const active=localStorage.getItem(ACTIVE_KEY);
+  if(!registry.includes(active)) localStorage.setItem(ACTIVE_KEY,registry[0]);
+}
+bootstrapRegistry();
+let KEY = 'fichaVoz.multi.state:'+localStorage.getItem(ACTIVE_KEY);
 const DEFAULT_VARS = [
   { id:"v1", name:"Oídio",           code:"MCRSDI", aliases:"oidio, oídio, oid" },
   { id:"v2", name:"Ferrugem",        code:"PHAKPA", aliases:"ferrugem, ferrug, fer" },
@@ -526,7 +570,7 @@ const DEFAULT_VARS = [
 ];
 const today = new Date().toISOString().slice(0,10);
 let S = {
-  proto:"FP26PR_SO", avaliador:"", data:today, fen:"", area:"", dataAp:"", nap:"",
+  proto:localStorage.getItem(ACTIVE_KEY)||"FP26PR_SO09", avaliador:"", data:today, fen:"", area:"", dataAp:"", nap:"",
   npar:48, vars:DEFAULT_VARS.map(v=>({...v})),
   cur:1, cursor:0, notes:{}, ant:{}, hist:[], tts:"short", rate:1.2, auto:"1", wake:"1",
   hfAnt:"1", hfBeep:"1", saDelay:"1100", saFocus:"1", demo:true
@@ -1437,9 +1481,9 @@ function safeSheetName(n,used){
   let b=s, k=2; while(used.has(s.toLowerCase())){ s=(b.slice(0,28)+"("+k+")"); k++; }
   used.add(s.toLowerCase()); return s;
 }
-function buildXlsx(scope){
+function buildXlsx(scope,allowEmpty=false){
   const includeCurrent = scope!=="hist";
-  const vars=allVars().filter(v=>seriesFor(v.id,includeCurrent).length>0);
+  const vars=allVars().filter(v=>allowEmpty || seriesFor(v.id,includeCurrent).length>0);
   if(!vars.length) throw new Error("não há avaliações para exportar");
   const used=new Set(), sheets=[];
   vars.forEach(v=>{
@@ -1631,12 +1675,13 @@ function seedDemo(){
   S.notes = {1:{v1:5,v2:10,v3:12,v4:0,v5:20}, 2:{v1:2,v2:8,v3:9,v4:0,v5:15}, 3:{v1:8,v2:18,v3:14,v4:0,v5:25}};
   S.cur=4; S.demo=true;
 }
-if(!load()){ seedDemo(); migrate(); }
+if(!load()){ S.demo=false; migrate(); save(); }
 bindConfig(); renderVarEditor(); renderHistVars(); render(); setupWake(); hfState("","Parado");
 if(!hasSR()) hfMsg("Este navegador não tem reconhecimento de voz — a avaliação guiada não vai funcionar aqui. O ditado do teclado continua disponível.");
 el("say").focus();
 </script>
 
+<script src="./ensaios.js"></script>
 <script src="./drive-sync.js"></script>
 </body>
 </html>
