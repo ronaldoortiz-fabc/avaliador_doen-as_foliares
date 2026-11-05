@@ -1,5 +1,5 @@
 /* Cache de interface - nenhuma avaliação é enviada ao Service Worker. */
-const CACHE = 'ficha-voz-ui-v4-multi-excel';
+const CACHE = 'ficha-voz-ui-v5-pastas-por-protocolo';
 const ASSETS = ['./','./index.html','./drive-sync.js','./ensaios.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(()=>self.skipWaiting()));

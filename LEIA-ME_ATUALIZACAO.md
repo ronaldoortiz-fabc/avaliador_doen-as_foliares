@@ -1,85 +1,43 @@
-# Correção de envio do Excel — atualização
+# Avaliador Fitopatologico - pastas por protocolo, historico imutavel de envios
 
-Esta versão acrescenta o botão **Drive > Enviar Excel ao Drive**. Ele gera novamente a planilha do protocolo selecionado e a envia sem sobrescrever as avaliações JSON. Se houver falha, a aba Drive apresenta a mensagem de erro do Google. Também corrige a mensagem de conclusão, que só confirma ambos os arquivos quando o Excel realmente foi enviado.
+## O que foi alterado
 
-**Para atualizar:** faça backup JSON dos ensaios, substitua na raiz do GitHub os arquivos `index.html`, `drive-sync.js` e `sw.js`, sem mudar os demais. Não apague os arquivos no Google Drive. Atualize o navegador com internet (às vezes são necessários dois recarregamentos por causa do cache offline). Entre em Drive, conecte sua conta e clique em **Enviar Excel ao Drive**. Confira `<PROTOCOLO>_avaliacoes.xlsx` na pasta `Avaliacoes_Fitopatologia`.
+A interface de avaliacao, os comandos de voz, as fichas, o historico e a exportacao Excel permanecem iguais aos da versao anterior. **Somente a rotina de sincronizacao Drive foi alterada.**
 
-**Se falhar:** copie a mensagem exibida em vermelho na aba Drive para diagnóstico. O arquivo JSON não é alterado por essa operação.
+- Cada protocolo recebe uma subpasta propria em `Avaliacoes_Fitopatologia/`, criada no primeiro envio.
+- Cada clique em **Sincronizar agora** gera **novos arquivos JSON e XLSX**, sem atualizar, substituir, mover ou excluir os arquivos ja enviados.
+- Os dois arquivos possuem o mesmo prefixo, iniciando com a data da avaliacao (`AAAA-MM-DD`), seguido de hora UTC, milissegundos, identificador aleatorio e codigo do protocolo, por exemplo:
+  - `2026-11-05_18-42-10-123_a1b2c3_FP26PR_SO09_avaliacoes.json`
+  - `2026-11-05_18-42-10-123_a1b2c3_FP26PR_SO09_avaliacoes.xlsx`
+- A data inicial vem do campo **Data** em Ajustes quando ha notas em andamento, ou da ultima avaliacao arquivada quando a ficha atual esta vazia.
+- O XLSX e **consolidado**: mantem uma aba por variavel e as avaliacoes arquivadas e atuais. O JSON e um **snapshot** de todo o estado do protocolo, para poder recuperar seu historico.
+- **Enviar Excel ao Drive** cria um XLSX novo e independente na mesma pasta, sem substituir arquivos e sem mexer no JSON.
+- **Restaurar do Drive** usa o snapshot JSON datado mais recente disponivel na subpasta; se so existir backup antigo diretamente na pasta principal, usa o arquivo legado.
+- **Listar ensaios do Drive** busca a copia mais recente de cada subpasta; arquivos antigos na pasta principal continuam acessiveis.
+- Avaliacoes continuam salvas automaticamente **no dispositivo** e funcionam offline. Para evitar centenas de arquivos durante o lancamento de notas, **o envio ao Drive passa a ser manual**: clique em Sincronizar agora ao fim de cada avaliacao. Sem internet, faca isso ao retornar.
 
----
+## Atualizacao no GitHub Pages
 
-# Avaliações Fitopatológicas — vários ensaios independentes
+1. Antes de alterar, sincronize e baixe um backup JSON da versao atual. **Nao limpe os dados do navegador** e nao apague arquivos do Drive.
+2. Extraia este ZIP e envie seu conteudo para o repositorio `avaliador_doen-as_foliares` no GitHub, substituindo os arquivos de mesmo nome. Mantenha `index.html` na raiz e a pasta `icons/` com os PNGs.
+3. Em GitHub > Actions, confira a publicacao Pages concluida com sucesso.
+4. Abra `https://ronaldoortiz-fabc.github.io/avaliador_doen-as_foliares/` com internet, atualize o navegador, e reinicie o aplicativo instalado se necessario.
+5. No aplicativo, selecione um **ensaio de teste** sem dados demonstrativos. Insira notas em algumas parcelas. Na aba Drive, conecte ao Google e clique em **Sincronizar agora**.
+6. Confirme no Drive: `Avaliacoes_Fitopatologia/TESTE001/` deve conter um JSON e um XLSX, com a data no inicio do nome.
+7. Depois de nova avaliacao, clique em Sincronizar agora novamente. Devem aparecer mais dois arquivos, mantendo os anteriores.
+8. Crie o ensaio `TESTE002` e envie uma avaliacao; confira que a nova pasta e exclusiva para ele.
+9. Teste **Restaurar do Drive** apenas depois de um backup local; a operacao restaura a copia mais recente e substitui os dados locais do protocolo, mediante confirmacao.
 
-## O que mudou
+## Avisos importantes
 
-- Botão **Meus ensaios** para criar, abrir e alternar protocolos.
-- Cada protocolo tem dados locais próprios: notas, avaliação anterior, histórico, número de parcelas, doenças e ajustes.
-- Cada sincronização bem-sucedida salva **dois arquivos por protocolo** na pasta `Avaliacoes_Fitopatologia` de sua conta Google Drive: `<PROTOCOLO>_avaliacoes.json` (recuperação completa) e `<PROTOCOLO>_avaliacoes.xlsx` (resultado, uma aba por doença). Mesmo um ensaio ainda sem notas pode produzir Excel com estrutura vazia.
-- Aba Drive: **Listar ensaios do Drive** e **Recuperar ensaio selecionado** para trazer um protocolo ainda não existente neste aparelho.
-- A ficha original, a entrada por voz, o histórico, o modo assistido e o download Excel continuam presentes.
-- A versão antiga de um único protocolo salva sob `fichaVoz.v2` é **copiada** para o novo banco local na primeira abertura, sem apagar o original.
+- Nenhum arquivo antigo do Drive e apagado ou movido. A partir desta versao os novos envios vao para subpastas.
+- Cada clique manual em **Sincronizar agora** produz um novo par mesmo que os dados nao tenham mudado. A hora e o identificador evitam colisao de nomes.
+- Se houver falha no envio Excel apos o JSON, o app informa o erro e deixa o JSON salvo. O botao **Enviar Excel ao Drive** permite enviar uma nova planilha sem modificar o JSON existente.
+- Evite enviar novamente durante uma operacao em andamento. Confirme o status antes de sair.
+- Um novo upload e sempre um snapshot completo; nao e um unico arquivo contendo somente as notas da ultima avaliacao. Isso preserva a possibilidade de recuperar o estado e o historico integral do protocolo.
+- O reconhecimento de voz no modo guiado pode exigir internet, conforme o navegador. O armazenamento offline nao depende disso.
+- A autorizacao OAuth e a conta Google previamente configurada continuam as mesmas.
 
-## ATUALIZAR seu site GitHub Pages
+## Arquivos
 
-Seu site atual é: `https://ronaldoortiz-fabc.github.io/avaliador_doen-as_foliares/`
-
-1. **Antes de substituir arquivos**, abra o aplicativo antigo com internet, conecte o Google e confirme que seu protocolo já aparece no Drive. Baixe também um backup JSON como medida adicional. **Não limpe os dados do navegador nem desinstale o app.**
-2. Extraia o ZIP. Dentro da pasta `Avaliador_Fitopatologia_Multiplos_Ensaios` estão os arquivos que devem ir para a **raiz** do mesmo repositório GitHub:
-   - `index.html`
-   - `drive-sync.js`
-   - `ensaios.js` (**novo**)
-   - `sw.js`
-   - `manifest.webmanifest`
-   - pasta `icons/`
-   - este guia (opcional)
-3. No GitHub, abra seu repositório `avaliador_doen-as_foliares`, substitua os arquivos antigos pelos novos e adicione `ensaios.js`. Você pode fazer isso pelo menu **Add file > Upload files**: arraste os arquivos e confirme o commit, verificando os caminhos. Para substituir itens específicos, use o editor de arquivos ou outra forma de atualização do repositório; não deixe cópias duplicadas em subpastas. Mantenha `index.html` na raiz.
-4. Aguarde o GitHub Pages indicar que a versão foi publicada. Abra a URL do site no navegador e atualize a página. **O aplicativo usa cache offline:** se aparecer a versão antiga, feche e abra novamente ou recarregue a página duas vezes com internet. No celular, recarregue o endereço com conexão antes de trabalhar offline.
-5. O **mesmo ID de cliente OAuth** já autorizado deve continuar funcionando, pois o domínio do GitHub Pages é o mesmo. Não inclua a chave secreta do cliente no código.
-
-## Uso diário
-
-1. Clique em **Meus ensaios**. Crie `FP26PR_SO10` com a quantidade de parcelas, por exemplo. O sistema abre o ensaio vazio.
-2. Na aba **Ajustes**, altere avaliador, variáveis, datas e demais configurações. O **código do protocolo fica fixo**, evitando que trocar o código misture notas antigas.
-3. Lance as notas por voz ou manualmente em **Avaliar**. As informações ficam no próprio aparelho, mesmo sem internet, depois que o app tiver sido carregado e armazenado no cache.
-4. No fim de cada data, vá em **Histórico > Finalizar avaliação** para arquivar a data e preparar a próxima avaliação. Como na versão original, confirme antes de finalizar.
-5. Quando tiver internet, acesse **Drive > Conectar Google** (se necessário) e **Sincronizar agora**. Aguarde a confirmação de **JSON e Excel salvos**.
-6. Entre em **Meus ensaios** e abra outro ensaio. Cada um tem seu próprio histórico e sincronização.
-7. Na aba **Excel > Baixar .xlsx**, também é possível baixar o Excel localmente, sem internet.
-
-## Recuperar no outro aparelho
-
-1. Abra o mesmo endereço do aplicativo, conectado à internet.
-2. Em **Drive**, informe o ID OAuth e clique em **Conectar Google**.
-3. Clique em **Listar ensaios do Drive**, escolha o código e clique em **Recuperar ensaio selecionado**.
-4. O ensaio entrará em **Meus ensaios**. Se já existir no aparelho, abra esse código e use **Restaurar do Drive** com cuidado: a restauração substitui o estado local selecionado, preservando um backup local.
-
-## Segurança e limites
-
-- **Drive não sincroniza offline.** O app grava localmente e envia quando houver internet e uma autorização OAuth válida. O login pode expirar; reautorize e use **Sincronizar agora**. Não considere uma avaliação protegida no Drive até a mensagem explícita de sucesso.
-- O reconhecimento automático de voz **Guiada (mãos livres)** costuma depender da rede. O ditado offline no modo Assistido depende do teclado/sistema do celular.
-- A sincronização verifica o arquivo JSON remoto contra a revisão conhecida. Em caso de edição por outro aparelho, exibe um conflito; **não** force a substituição sem antes restaurar/comparar os dados. O botão **Substituir cópia remota** cria backup da versão JSON anterior, mas é uma operação destrutiva se houver alterações concorrentes.
-- O arquivo Excel no Drive é um **derivado** das notas salvas no JSON. Para restauração use o JSON, não o Excel.
-- Não edite manualmente os arquivos JSON no Drive. Se renomear ou mover arquivos, a recuperação automática pode não os encontrar.
-- O Google Drive usa o escopo `drive.file`: a aplicação enxerga seus próprios arquivos criados/autorizados; não tem acesso geral a todo o seu Drive.
-- A publicação do GitHub Pages é pública em configurações comuns. Não coloque JSON com notas reais, segredos OAuth ou dados confidenciais no repositório; esses dados pertencem à conta Drive autorizada.
-- Seu armazenamento do navegador é por **origem** (domínio). Trocar de domínio ou limpar dados do navegador exige restaurar do Drive.
-- Se sua conta Google usa modo **Testing** para um aplicativo OAuth externo, o acesso pode requerer reautorização após expiração; mantenha o usuário de teste autorizado.
-
-## Teste obrigatório após a atualização
-
-1. Abra `FP26PR_SO09`, anote uma nota de teste e confira se ela permanece após recarregar a página.
-2. Crie `FP26PR_SO10`, lance uma nota diferente, volte ao `FP26PR_SO09` e confirme que não houve mistura.
-3. Sincronize cada ensaio individualmente e confira no Drive os quatro arquivos (`.json` e `.xlsx` de cada protocolo).
-4. Abra uma planilha `.xlsx` e confirme abas por doença e uma coluna por avaliação.
-5. Desative a internet, registre notas e reabra o aplicativo. Ligue a internet novamente e sincronize.
-6. Antes de usar em avaliações reais, verifique a restauração de um protocolo de teste em **outro navegador ou aparelho**.
-
-## Detalhes técnicos
-
-- Armazenamento local por protocolo: `fichaVoz.multi.state:<CODIGO>`.
-- Índice local: `fichaVoz.multi.registry.v1`; projeto ativo: `fichaVoz.multi.active.v1`.
-- Estado original `fichaVoz.v2` preservado.
-- PWA com cache versionado em `sw.js`; dados não são enviados para o Service Worker.
-- OAuth Google Identity Services, token apenas em memória; nenhuma chave secreta é necessária.
-
-**Estado da entrega:** verificação de sintaxe e estrutura realizadas. A autenticação e escrita reais no Drive devem ser confirmadas por você no site publicado; não foram executadas com acesso à sua conta.
+`index.html`, `ensaios.js`, `drive-sync.js`, `sw.js`, `manifest.webmanifest`, `icons/icon-192.png`, `icons/icon-512.png`, `LEIA-ME_ATUALIZACAO.md`.
