@@ -48,16 +48,49 @@
     create(code,Number(state.npar),state);
     activate(code);
   }
+  // Exclui somente o cadastro e os dados locais deste protocolo.
+  // Arquivos enviados ao Google Drive nunca sao alterados por esta acao.
+  function removeLocal(code){
+    const msg=$('ensaiosMsg');
+    msg.textContent='';
+    try{
+      if(window.FichaDrive?.isBusy?.()) throw Error('Ha uma sincronizacao em andamento. Conclua antes de excluir.');
+      const current=reg();
+      if(!current.includes(code)) throw Error('Ensaio nao encontrado.');
+      if(current.length<=1) throw Error('Para excluir o ultimo ensaio, crie primeiro outro protocolo.');
+      const typed=window.prompt('EXCLUIR ENSAIO LOCAL\n\nIsso removera as notas e o historico deste ensaio APENAS deste dispositivo. Os arquivos JSON e Excel no Google Drive serao mantidos.\n\nDigite exatamente '+code+' para confirmar:', '');
+      if(typed===null) return;
+      if(typed.trim()!==code){msg.textContent='Exclusao cancelada: codigo de confirmacao diferente.';return;}
+      // Se ativo, primeiro abre um protocolo alternativo, antes de apagar a chave local.
+      if(localStorage.getItem(ACTIVE_KEY)===code || S.proto===code){
+        const alternative=current.find(x=>x!==code && localStorage.getItem(storageKey(x))!==null);
+        if(!alternative) throw Error('Nao ha outro ensaio local disponivel para abrir.');
+        activate(alternative);
+      }
+      // Mantem o registro anterior caso o armazenamento recuse alguma operacao.
+      writeReg(current.filter(x=>x!==code));
+      localStorage.removeItem(storageKey(code));
+      list();
+      $('ensaiosOverlay').hidden=false;
+      msg.textContent='Ensaio '+code+' excluido somente deste aparelho. Arquivos no Drive preservados.';
+    }catch(e){msg.textContent='Nao foi possivel excluir: '+(e.message||e);}
+  }
   function list(){
     const box=$('ensaiosLista');box.replaceChildren();
     for(const code of reg()){
-      const st=JSON.parse(localStorage.getItem(storageKey(code))||'{}');
+      let st={};
+      try{st=JSON.parse(localStorage.getItem(storageKey(code))||'{}')||{};}catch(e){}
       const row=document.createElement('div');row.className='card';row.style.padding='10px';
+      const actions=document.createElement('div');actions.className='row wrap';
       const btn=document.createElement('button');btn.className='btn primary';btn.textContent='Abrir '+code;
       btn.onclick=()=>{try{activate(code);}catch(e){$('ensaiosMsg').textContent=e.message;}};
+      const del=document.createElement('button');del.className='btn danger';del.type='button';del.textContent='Excluir';
+      del.setAttribute('aria-label','Excluir ensaio '+code+' deste aparelho');
+      del.onclick=()=>removeLocal(code);
+      actions.append(btn,del);
       const desc=document.createElement('div');desc.className='tiny muted';
       desc.textContent=(st.hist?.length||0)+' avaliacoes arquivadas · '+(Object.keys(st.notes||{}).length)+' parcelas com notas atuais'+(code===S.proto?' · ativo':'');
-      row.append(btn,desc);box.append(row);
+      row.append(actions,desc);box.append(row);
     }
   }
   function open(){list();$('ensaiosOverlay').hidden=false;}
