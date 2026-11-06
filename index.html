@@ -462,7 +462,7 @@ code{font-family:var(--font-num);background:var(--surface-2);padding:1px 5px;bor
         </label>
         <label class="f">Velocidade da fala<input id="cRate" type="range" min="0.8" max="1.8" step="0.1"></label>
         <label class="f">Avançar sozinho
-          <select id="cAuto"><option value="1">Sim, ao completar a parcela</option><option value="0">Não</option></select>
+          <select id="cAuto"><option value="2">Por voz: escolher próxima parcela</option><option value="1">Sim, próxima numérica</option><option value="0">Não</option></select>
         </label>
         <label class="f">Manter tela ligada
           <select id="cWake"><option value="1">Sim</option><option value="0">Não</option></select>
@@ -575,7 +575,7 @@ const today = new Date().toISOString().slice(0,10);
 let S = {
   proto:localStorage.getItem(ACTIVE_KEY)||"FP26PR_SO09", avaliador:"", data:today, fen:"", area:"", dataAp:"", nap:"",
   npar:48, vars:DEFAULT_VARS.map(v=>({...v})),
-  cur:1, cursor:0, notes:{}, ant:{}, hist:[], tts:"short", rate:1.2, auto:"1", wake:"1",
+  cur:1, cursor:0, awaitingPlot:false, fieldNavigationVersion:1, notes:{}, ant:{}, hist:[], tts:"short", rate:1.2, auto:"2", wake:"1",
   hfAnt:"1", hfBeep:"1", saDelay:"1100", saFocus:"1", demo:true
 };
 let undoStack = [];
@@ -596,6 +596,13 @@ function load(){
 // completa campos de versões anteriores do app
 function migrate(){
   if(!Array.isArray(S.hist)) S.hist=[];
+  // Migra uma unica vez o modo antigo para a navegacao escolhida por voz.
+  // Depois disso respeita o modo configurado manualmente pelo avaliador.
+  if(!S.fieldNavigationVersion){
+    if(S.auto === '1') S.auto = '2';
+    S.fieldNavigationVersion = 1;
+  }
+  if(typeof S.awaitingPlot !== 'boolean') S.awaitingPlot = false;
   const known={"oidio":"MCRSDI","ferrugem":"PHAKPA","dfc":"DFC","dfc s":"DFC","fitotoxicidade":"PHYTOX","desfolha":"DESF"};
   S.vars.forEach(v=>{
     if(v.code) return;
@@ -810,7 +817,7 @@ function firstEmpty(p){
 }
 function setPlot(p){
   p=Math.max(1,Math.min(S.npar,Math.round(p)));
-  S.cur=p; S.cursor=firstEmpty(p); render(); save();
+  S.cur=p; S.cursor=firstEmpty(p); S.awaitingPlot=false; render(); save();
 }
 function pushUndo(){
   undoStack.push({notes:JSON.parse(JSON.stringify(S.notes)), cur:S.cur, cursor:S.cursor});
@@ -822,14 +829,42 @@ function undo(){
   S.notes=u.notes; S.cur=u.cur; S.cursor=u.cursor;
   save(); render(); flash(`Desfeito — parcela ${S.cur}, ${S.vars[S.cursor].name}.`,"ok"); speak("desfeito");
 }
+// A parcela so e selecionada por numero depois da ultima doenca.
+function fieldNavigation(){ return S.auto === '2'; }
+function parsePlotNumber(raw){
+  const normalized=norm(raw);
+  const text=normalized.replace(/^parcela(?:s)?\s+/, '');
+  if(!text || text === normalized && /^parcela(?:s)?$/.test(text)) return null;
+  const words=text.split(' ');
+  const result=readNum(words,0);
+  if(!result || result.next!==words.length || !Number.isInteger(result.v)) return null;
+  return result.v;
+}
+function setNextPlotFromVoice(raw){
+  const number=parsePlotNumber(raw);
+  if(number===null || number<1 || number>S.npar){
+    flash(`Informe uma parcela entre 1 e ${S.npar}.`, 'err');
+    return false;
+  }
+  setPlot(number);
+  // Uma parcela anteriormente avaliada pode ser revisitada sem apagar notas.
+  // A variavel inicial e a primeira ainda vazia, ou a primeira, se completa.
+  hf.lastParcela=null;
+  flash(`Parcela ${number} selecionada.`, 'ok');
+  lastEntry={type:'plot-selected',plot:number};
+  return true;
+}
 function applyValues(p,values){
   pushUndo();
   S.notes[p]=Object.assign({}, S.notes[p]||{}, values);
   S.demo=false;
   const complete = S.vars.every(v=> S.notes[p][v.id]!==undefined && S.notes[p][v.id]!==null );
   S.cursor=firstEmpty(p);
+  if(fieldNavigation() && complete) S.awaitingPlot=true;
   save(); render();
-  readback(p);
+  if(fieldNavigation() && complete) speak(`Parcela ${p} finalizada.`);
+  else readback(p);
+  lastEntry={val:null,name:'',completedP:complete?p:null,wrote:Object.keys(values).length};
   if(complete && S.auto==="1" && p<S.npar) setTimeout(()=>setPlot(p+1), 350);
   return complete;
 }
@@ -838,7 +873,7 @@ function applySeq(seq){
   const n=S.vars.length;
   pushUndo();
   let wrote=0, ignored=0, lastVal=null, lastName="", completedP=null;
-  for(const val of seq){
+  for(const [i,val] of seq.entries()){
     if(S.cursor>=n) S.cursor=0;
     const v=S.vars[S.cursor];
     if(val!==null && val!==undefined){
@@ -849,8 +884,13 @@ function applySeq(seq){
     S.cursor++;
     if(S.cursor>=n){
       completedP=S.cur; S.cursor=0;
+      if(fieldNavigation()){
+        S.awaitingPlot=true;
+        ignored=seq.length-i-1;
+        break;
+      }
       if(S.auto==="1" && S.cur<S.npar) S.cur++;
-      else { ignored = seq.length - (seq.indexOf(val)+1); break; }
+      else { ignored = seq.length-i-1; break; }
     }
   }
   S.demo=false;
@@ -861,7 +901,10 @@ function applySeq(seq){
   if(!wrote){ flash(`Nada lançado — próxima: ${nextName}.`,"err"); return; }
   const dito = S.tts==="full" ? `${lastName} ${fmt(lastVal)}` : fmt(lastVal);
   if(completedP!==null){
-    if(S.auto==="1" && completedP!==S.cur){
+    if(fieldNavigation()){
+      flash(`Parcela ${completedP} finalizada.${ignored?` ${ignored} valor(es) excedente(s) ignorado(s).`:''}`, 'ok');
+      speak(`Parcela ${completedP} finalizada.`);
+    } else if(S.auto==="1" && completedP!==S.cur){
       flash(`Parcela ${completedP} completa. Agora parcela ${S.cur} — ${nextName}.`,"ok");
       if(wrote>1) { readback(completedP); } else { speak(`${dito}. Parcela ${S.cur}.`); }
     } else {
@@ -883,6 +926,22 @@ function toast(msg){
 }
 
 function handle(raw){
+  if(fieldNavigation() && S.awaitingPlot){
+    const command=interpret(raw);
+    if(command.type==='cmd' && command.cmd==='stop'){
+      if(hf.on) hfStop('Pausado por comando de voz.');
+      if(sa.on) saStop('Pausado por comando de voz.');
+      return;
+    }
+    if(command.type==='cmd' && command.cmd==='undo'){
+      S.awaitingPlot=false; undo(); return;
+    }
+    if(command.type==='cmd' && command.cmd==='repeat'){
+      speak(`Parcela ${S.cur} finalizada.`);return;
+    }
+    setNextPlotFromVoice(raw);
+    return;
+  }
   const r=interpret(raw);
   switch(r.type){
     case "empty": return;
@@ -974,6 +1033,7 @@ function hfPrompt(forceAnterior=false){
   return t;
 }
 function hfStart(){
+  if(fieldNavigation() && !Object.keys(S.notes).length && !S.awaitingPlot) setPlot(1);
   if(!hasSR()){
     hfMsg("Este navegador não tem reconhecimento de voz. Use o microfone do teclado e o botão Lançar.");
     return;
@@ -985,7 +1045,8 @@ function hfStart(){
     const C=window.AudioContext||window.webkitAudioContext;
     if(C){ hf.ac = hf.ac || new C(); if(hf.ac.state==="suspended") hf.ac.resume(); }
   }catch(e){}
-  hfSay(hfPrompt());
+  if(fieldNavigation() && S.awaitingPlot) hfSay(`Parcela ${S.cur} finalizada.`);
+  else hfSay(hfPrompt());
 }
 function hfStop(msg){
   speechRequest++;
@@ -1046,6 +1107,23 @@ function hfError(code){
 // tenta cada alternativa do reconhecedor até uma virar nota ou comando
 function hfApply(alts){
   hfState("","Processando…");
+  if(fieldNavigation() && S.awaitingPlot){
+    const chosen=alts.find(a=>{const n=parsePlotNumber(a);return n!==null&&n>=1&&n<=S.npar;});
+    if(!chosen){
+      hfMsg('Número de parcela não reconhecido ou fora do intervalo.');
+      hfSay(`Informe um número de parcela de 1 a ${S.npar}.`);
+      return;
+    }
+    quiet=true;
+    const selected=setNextPlotFromVoice(chosen);
+    quiet=false;
+    if(selected){
+      hf.retries=0;
+      hfMsg(`Ouvi: <b>${chosen.replace(/</g,'&lt;')}</b>`);
+      hfSay(hfPrompt(true));
+    }
+    return;
+  }
   let used=null, r=null;
   for(const a of alts){
     const x=interpret(a);
@@ -1069,7 +1147,9 @@ function hfApply(alts){
     if(r.cmd==="clear"){ quiet=true; handle(used); quiet=false; hf.lastParcela=null; const a=hfPrompt(); hfSay("Parcela limpa. "+a, a); return; }
     if(r.cmd==="allzero"){
       quiet=true; handle(used); quiet=false;
-      const a=hfPrompt(); hfSay("Tudo zero. "+a, a); return;
+      if(fieldNavigation() && S.awaitingPlot) hfSay(`Parcela ${S.cur} finalizada.`);
+      else {const a=hfPrompt(); hfSay("Tudo zero. "+a, a);}
+      return;
     }
     if(r.cmd==="next"||r.cmd==="prev"){ quiet=true; handle(used); quiet=false; hf.lastParcela=null; hfSay(hfPrompt()); return; }
   }
@@ -1077,7 +1157,11 @@ function hfApply(alts){
 
   // nota: lança e emenda a confirmação com o próximo pedido
   quiet=true; handle(used); quiet=false;
-  const dito = lastEntry.wrote ? `${fmt(lastEntry.val)}. ` : "";
+  const dito = lastEntry.wrote && lastEntry.val!==null ? `${fmt(lastEntry.val)}. ` : "";
+  if(fieldNavigation() && S.awaitingPlot){
+    hfSay(`Parcela ${S.cur} finalizada.`);
+    return;
+  }
   if(lastEntry.completedP===S.npar && S.cur===S.npar && S.cursor===0){
     hfStop("Última parcela concluída. Vá em Histórico para finalizar a avaliação.");
     speak(`${dito}Avaliação concluída.`);
@@ -1092,10 +1176,12 @@ function hfApply(alts){
 const sa = { on:false, timer:null, ask:"" };
 function saStart(){
   if(hf.on) return;
+  if(fieldNavigation() && !Object.keys(S.notes).length && !S.awaitingPlot) setPlot(1);
   sa.on=true; sa.speaking=false; hf.lastParcela=null;
   try{ if(navigator.wakeLock && !hf.wl) navigator.wakeLock.request("screen").then(w=>hf.wl=w).catch(()=>{}); }catch(e){}
   hfMsg("A cada nota: toque o microfone do teclado, fale e espere — eu lanço, fecho o microfone e falo a próxima.");
-  saAsk();
+  if(fieldNavigation() && S.awaitingPlot) saSpeak(`Parcela ${S.cur} finalizada.`);
+  else saAsk();
 }
 function saStop(msg){
   speechRequest++;
@@ -1116,7 +1202,7 @@ function saMute(){
 function saUnmute(){
   sa.speaking=false;
   el("say").value="";          // limpa qualquer eco que tenha escapado
-  hfState("pronto","Toque o microfone do teclado e fale a nota");
+  hfState("pronto",fieldNavigation() && S.awaitingPlot ? "Informe a próxima parcela (ex.: 6 ou Parcela 6)" : "Toque o microfone do teclado e fale a nota");
   if(S.saFocus!=="0"){ try{ el("say").focus(); }catch(e){} }
 }
 function saSpeak(text){
@@ -1141,6 +1227,13 @@ function saCommit(){
   clearTimeout(sa.timer);
   const txt=el("say").value.trim();
   if(!txt) return;
+  if(fieldNavigation() && S.awaitingPlot){
+    saMute();
+    const selected=setNextPlotFromVoice(txt);
+    if(selected){hfMsg(`Parcela ${S.cur} selecionada.`);saAsk();}
+    else saSpeak(`Número inválido. Informe a próxima parcela de 1 a ${S.npar}.`);
+    return;
+  }
   const r=interpret(txt);
   saMute();   // fecha o microfone antes de qualquer fala
   if(r.type==="unknown" || r.type==="empty"){
@@ -1152,6 +1245,10 @@ function saCommit(){
   hfMsg(`Ouvi: <b>${txt.slice(0,60)}</b>`);
   quiet=true; handle(txt); quiet=false;
   if(r.type!=="seq") hf.lastParcela=null;          // comando ou troca de parcela: reanuncia a parcela
+  if(fieldNavigation() && S.awaitingPlot){
+    saSpeak(`Parcela ${S.cur} finalizada.`);
+    return;
+  }
   if(lastEntry.completedP===S.npar && S.cur===S.npar && S.cursor===0){
     saStop("Última parcela concluída. Vá em Histórico para finalizar a avaliação.");
     speak("Avaliação concluída.", ()=>{});
@@ -1672,7 +1769,9 @@ function submitSay(){
 el("sendBtn").onclick=submitSay;
 el("say").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); submitSay(); } });
 document.querySelectorAll(".quick button").forEach(b=> b.onclick=()=>{
-  if(sa.on){ clearTimeout(sa.timer); quiet=true; handle(b.dataset.cmd); quiet=false; hf.lastParcela=null; saAsk(); }
+  if(sa.on){ clearTimeout(sa.timer); quiet=true; handle(b.dataset.cmd); quiet=false; hf.lastParcela=null;
+    if(fieldNavigation() && S.awaitingPlot) saSpeak(`Parcela ${S.cur} finalizada.`);
+    else saAsk(); }
   else handle(b.dataset.cmd);
   el("say").focus();
 });
@@ -1699,7 +1798,7 @@ el("finalizar").onclick=function(){
     vars:S.vars.map(v=>({id:v.id,name:v.name,code:v.code}))
   });
   S.ant=JSON.parse(JSON.stringify(S.notes));
-  S.notes={}; S.cur=1; S.demo=false; undoStack=[];
+  S.notes={}; S.cur=1; S.awaitingPlot=false; S.demo=false; undoStack=[];
   save(); render(); renderHist(); renderAntGrid();
   el("histMsg").textContent=`Avaliação ${S.hist.length} arquivada com ${n} parcelas. A ficha está limpa e as notas viraram a coluna “anterior”.`;
 };
@@ -1710,8 +1809,8 @@ el("xlsxBtn").onclick=async ()=>{
   catch(err){ msg.textContent="Não foi possível gerar o arquivo: "+((err&&err.message)||err); }
 };
 el("addVar").onclick=()=>{ S.vars.push({id:"v"+Date.now(),name:"Nova variável",code:"VAR",aliases:""}); save(); renderVarEditor(); render(); };
-el("clearDemo").onclick=()=>{ S.notes={}; S.ant={}; S.demo=false; S.cur=1; save(); render(); };
-el("resetNotes").onclick=()=>{ S.notes={}; S.cur=1; S.demo=false; undoStack=[]; save(); render(); toast("Notas zeradas"); };
+el("clearDemo").onclick=()=>{ S.notes={}; S.ant={}; S.demo=false; S.cur=1; S.awaitingPlot=false; save(); render(); };
+el("resetNotes").onclick=()=>{ S.notes={}; S.cur=1; S.awaitingPlot=false; S.demo=false; undoStack=[]; save(); render(); toast("Notas zeradas"); };
 el("resetAll").onclick=()=>{ try{localStorage.removeItem(KEY);}catch(e){} location.reload(); };
 
 document.querySelectorAll(".tabs button").forEach(b=>{
@@ -1751,8 +1850,8 @@ el("say").focus();
   const clean=(code)=>protoId(code);
   const blank=(code,npar=48)=>({
     proto:code, avaliador:'',data:new Date().toLocaleDateString('en-CA'),fen:'',area:'',dataAp:'',nap:'',
-    npar,vars:DEFAULT_VARS.map(v=>({...v})),cur:1,cursor:0,notes:{},ant:{},hist:[],
-    tts:'short',rate:1.2,auto:'1',wake:'1',hfAnt:'1',hfBeep:'1',saDelay:'1100',saFocus:'1',demo:false
+    npar,vars:DEFAULT_VARS.map(v=>({...v})),cur:1,cursor:0,awaitingPlot:false,fieldNavigationVersion:1,notes:{},ant:{},hist:[],
+    tts:'short',rate:1.2,auto:'2',wake:'1',hfAnt:'1',hfBeep:'1',saDelay:'1100',saFocus:'1',demo:false
   });
   function activate(code){
     if(window.FichaDrive?.isBusy?.()) throw Error('Sincronização em andamento. Tente novamente após concluir.');

@@ -1,5 +1,5 @@
-/* Avaliador Fitopatologico: HTML autonomo, versao 8. */
-const CACHE = 'ficha-voz-ui-v8-tudo-inline';
+/* Avaliador Fitopatologico: HTML autonomo, versao 9. */
+const CACHE = 'ficha-voz-ui-v9-campo-voz';
 const PREFIX = 'ficha-voz-ui-';
 const ASSETS = ['./index.html', './', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 self.addEventListener('install', event => {

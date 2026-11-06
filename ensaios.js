@@ -8,8 +8,8 @@
   const clean=(code)=>protoId(code);
   const blank=(code,npar=48)=>({
     proto:code, avaliador:'',data:new Date().toLocaleDateString('en-CA'),fen:'',area:'',dataAp:'',nap:'',
-    npar,vars:DEFAULT_VARS.map(v=>({...v})),cur:1,cursor:0,notes:{},ant:{},hist:[],
-    tts:'short',rate:1.2,auto:'1',wake:'1',hfAnt:'1',hfBeep:'1',saDelay:'1100',saFocus:'1',demo:false
+    npar,vars:DEFAULT_VARS.map(v=>({...v})),cur:1,cursor:0,awaitingPlot:false,fieldNavigationVersion:1,notes:{},ant:{},hist:[],
+    tts:'short',rate:1.2,auto:'2',wake:'1',hfAnt:'1',hfBeep:'1',saDelay:'1100',saFocus:'1',demo:false
   });
   function activate(code){
     if(window.FichaDrive?.isBusy?.()) throw Error('Sincronização em andamento. Tente novamente após concluir.');
