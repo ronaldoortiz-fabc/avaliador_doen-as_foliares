@@ -15,6 +15,7 @@ img{max-width:100%}
 [hidden]{display:none!important}
 </style>
 <title>Ficha de Voz · Fitopatologia</title>
+<meta name="app-offline-version" content="v8-tudo-inline">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icons/icon-192.png" type="image/png">
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -1738,8 +1739,494 @@ if(!hasSR()) hfMsg("Este navegador não tem reconhecimento de voz — a avaliaç
 el("say").focus();
 </script>
 
-<script src="./ensaios.js"></script>
-<script src="./drive-sync.js"></script>
+<script>
+/* Modulo de ensaios incluido para funcionamento offline autonomo */
+/* Gerenciamento local de ensaios, compativel com a ficha de voz original. */
+(() => {
+  'use strict';
+  const $=id=>document.getElementById(id);
+  const reg=()=>JSON.parse(localStorage.getItem(REGISTRY_KEY)||'[]');
+  const writeReg=xs=>localStorage.setItem(REGISTRY_KEY,JSON.stringify(xs));
+  const storageKey=code=>'fichaVoz.multi.state:'+code;
+  const clean=(code)=>protoId(code);
+  const blank=(code,npar=48)=>({
+    proto:code, avaliador:'',data:new Date().toLocaleDateString('en-CA'),fen:'',area:'',dataAp:'',nap:'',
+    npar,vars:DEFAULT_VARS.map(v=>({...v})),cur:1,cursor:0,notes:{},ant:{},hist:[],
+    tts:'short',rate:1.2,auto:'1',wake:'1',hfAnt:'1',hfBeep:'1',saDelay:'1100',saFocus:'1',demo:false
+  });
+  function activate(code){
+    if(window.FichaDrive?.isBusy?.()) throw Error('Sincronização em andamento. Tente novamente após concluir.');
+    if(hf.on) hfStop();
+    if(sa.on) saStop();
+    const item=JSON.parse(localStorage.getItem(storageKey(code))||'null');
+    if(!item) throw Error('Ensaio local não encontrado.');
+    KEY=storageKey(code);
+    localStorage.setItem(ACTIVE_KEY,code);
+    S=Object.assign(blank(code),item,{proto:code});
+    migrate();undoStack=[];
+    const mapping=[['cProto','proto'],['cAval','avaliador'],['cData','data'],['cFen','fen'],['cArea','area'],['cDataAp','dataAp'],['cNap','nap'],['cNpar','npar'],['cTts','tts'],['cRate','rate'],['cAuto','auto'],['cWake','wake'],['cHfAnt','hfAnt'],['cHfBeep','hfBeep'],['cSaDelay','saDelay'],['cSaFocus','saFocus']];
+    mapping.forEach(([id,key])=>{if($(id)) $(id).value=S[key]??'';});
+    renderVarEditor();renderHist();render();setupWake();
+    $('ensaiosAtual').textContent=code;
+    $('ensaiosOverlay').hidden=true;
+    save();
+    window.dispatchEvent(new CustomEvent('ficha:project-switched',{detail:{protocol:code}}));
+  }
+  function create(code,npar=48, state=null){
+    code=clean(code);
+    if(!code || !/^[A-Z0-9][A-Z0-9_-]*$/.test(code)) throw Error('Informe um codigo de protocolo valido (letras, numeros, _ ou -).');
+    if(reg().includes(code)) throw Error('Esse protocolo ja existe neste aparelho. Abra-o na lista.');
+    if(npar<1||npar>150||!Number.isInteger(npar)) throw Error('Numero de parcelas deve estar entre 1 e 150.');
+    const record=state?{...structuredClone(state),proto:code}:blank(code,npar);
+    localStorage.setItem(storageKey(code),JSON.stringify(record));
+    writeReg([...reg(),code]);
+    return code;
+  }
+  function importState(state){
+    const code=clean(state.proto);
+    if(!code) throw Error('O backup nao tem codigo de protocolo.');
+    if(reg().includes(code)){
+      throw Error('Ja existe esse ensaio no aparelho. Abra-o e utilize Restaurar do Drive.');
+    }
+    create(code,Number(state.npar),state);
+    activate(code);
+  }
+  // Exclui somente o cadastro e os dados locais deste protocolo.
+  // Arquivos enviados ao Google Drive nunca sao alterados por esta acao.
+  function removeLocal(code){
+    const msg=$('ensaiosMsg');
+    msg.textContent='';
+    try{
+      if(window.FichaDrive?.isBusy?.()) throw Error('Ha uma sincronizacao em andamento. Conclua antes de excluir.');
+      const current=reg();
+      if(!current.includes(code)) throw Error('Ensaio nao encontrado.');
+      if(current.length<=1) throw Error('Para excluir o ultimo ensaio, crie primeiro outro protocolo.');
+      const typed=window.prompt('EXCLUIR ENSAIO LOCAL\n\nIsso removera as notas e o historico deste ensaio APENAS deste dispositivo. Os arquivos JSON e Excel no Google Drive serao mantidos.\n\nDigite exatamente '+code+' para confirmar:', '');
+      if(typed===null) return;
+      if(typed.trim()!==code){msg.textContent='Exclusao cancelada: codigo de confirmacao diferente.';return;}
+      // Se ativo, primeiro abre um protocolo alternativo, antes de apagar a chave local.
+      if(localStorage.getItem(ACTIVE_KEY)===code || S.proto===code){
+        const alternative=current.find(x=>x!==code && localStorage.getItem(storageKey(x))!==null);
+        if(!alternative) throw Error('Nao ha outro ensaio local disponivel para abrir.');
+        activate(alternative);
+      }
+      // Mantem o registro anterior caso o armazenamento recuse alguma operacao.
+      writeReg(current.filter(x=>x!==code));
+      localStorage.removeItem(storageKey(code));
+      list();
+      $('ensaiosOverlay').hidden=false;
+      msg.textContent='Ensaio '+code+' excluido somente deste aparelho. Arquivos no Drive preservados.';
+    }catch(e){msg.textContent='Nao foi possivel excluir: '+(e.message||e);}
+  }
+  function list(){
+    const box=$('ensaiosLista');box.replaceChildren();
+    for(const code of reg()){
+      let st={};
+      try{st=JSON.parse(localStorage.getItem(storageKey(code))||'{}')||{};}catch(e){}
+      const row=document.createElement('div');row.className='card';row.style.padding='10px';
+      const actions=document.createElement('div');actions.className='row wrap';
+      const btn=document.createElement('button');btn.className='btn primary';btn.textContent='Abrir '+code;
+      btn.onclick=()=>{try{activate(code);}catch(e){$('ensaiosMsg').textContent=e.message;}};
+      const del=document.createElement('button');del.className='btn danger';del.type='button';del.textContent='Excluir';
+      del.setAttribute('aria-label','Excluir ensaio '+code+' deste aparelho');
+      del.onclick=()=>removeLocal(code);
+      actions.append(btn,del);
+      const desc=document.createElement('div');desc.className='tiny muted';
+      desc.textContent=(st.hist?.length||0)+' avaliacoes arquivadas · '+(Object.keys(st.notes||{}).length)+' parcelas com notas atuais'+(code===S.proto?' · ativo':'');
+      row.append(actions,desc);box.append(row);
+    }
+  }
+  function open(){list();$('ensaiosOverlay').hidden=false;}
+  $('ensaiosBtn').onclick=open;
+  $('ensaiosFechar').onclick=()=>{$('ensaiosOverlay').hidden=true;};
+  $('ensaioCriar').onclick=()=>{
+    const msg=$('ensaiosMsg');msg.textContent='';
+    try{
+      const code=create($('ensaioNovoCodigo').value,Number($('ensaioNovoNpar').value));
+      $('ensaioNovoCodigo').value='';activate(code);
+    }catch(e){msg.textContent=e.message;}
+  };
+  $('ensaiosAtual').textContent=S.proto;
+  $('cProto').readOnly=true;
+  // Ao iniciar primeira vez, exibe a lista para evitar lancamento no protocolo errado.
+  if(!sessionStorage.getItem('fichaVoz.multi.welcome')){
+    sessionStorage.setItem('fichaVoz.multi.welcome','1');open();
+  }
+  window.FichaEnsaios={create,activate,importState,open,list,registry:reg,has:code=>reg().includes(clean(code))};
+})();
+
+</script>
+<script>
+/* Modulo Google Drive incluido para funcionamento offline autonomo */
+/* Sincronização Google Drive - uso pessoal, offline primeiro.
+   OAuth: Google Identity Services, escopo drive.file. Não armazena access token. */
+(() => {
+  'use strict';
+  const FOLDER = 'Avaliacoes_Fitopatologia';
+  const OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+  const SETTINGS_KEY = 'fichaVoz.drive.oauthClientId';
+  const META_PREFIX = 'fichaVoz.drive.sync.v1:';
+  const API = 'https://www.googleapis.com/drive/v3/files';
+  const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
+  const byId = id => document.getElementById(id);
+  let accessToken = null, tokenClient = null, busy = false, folderId = null;
+  const protocolFolders = new Map();
+  let authorizedUntil = 0;
+  const safeProto = () => protoId(S.proto) || 'ENSAIO';
+  const fileName = () => safeProto() + '_avaliacoes.json'; // nome somente do backup baixado
+  const formatEvalDate = v => /^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : new Date().toLocaleDateString('en-CA');
+  // A data da avaliacao inicia o nome; o horario UTC + identificador evita qualquer sobrescrita.
+  const evalDate = () => {
+    const hasNotes = Object.keys(S.notes || {}).some(p => Object.keys(S.notes[p] || {}).length);
+    const last = (S.hist || []).at(-1);
+    return formatEvalDate(hasNotes ? S.data : (last?.data || S.data));
+  };
+  const newBatch = () => {
+    const now = new Date();
+    const stamp = now.toISOString().slice(11,19).replace(/:/g,'-') + '-' + now.getUTCMilliseconds().toString().padStart(3,'0');
+    const rand = Math.random().toString(36).slice(2,8);
+    return evalDate() + '_' + stamp + '_' + rand + '_' + safeProto() + '_avaliacoes';
+  };
+  const metaKey = () => META_PREFIX + safeProto();
+  const localMeta = () => { try { return JSON.parse(localStorage.getItem(metaKey()) || '{}'); } catch { return {}; } };
+  const setLocalMeta = obj => { localStorage.setItem(metaKey(), JSON.stringify(obj)); showInfo(); };
+  const status = (message, err = false) => {
+    const e = byId('driveStatus'); e.textContent = message; e.className = 'tiny ' + (err ? 'feedback err' : 'muted');
+  };
+  const isOnline = () => navigator.onLine;
+  const isAuthorized = () => Boolean(accessToken && Date.now() < authorizedUntil - 30000);
+  function showInfo() {
+    const m = localMeta();
+    byId('driveSyncInfo').textContent = m.syncedAt
+      ? 'Última sincronização confirmada deste protocolo: ' + new Date(m.syncedAt).toLocaleString('pt-BR')
+      : 'Este protocolo ainda não tem sincronização confirmada neste dispositivo.';
+  }
+  function requireAuth() {
+    if (!isOnline()) throw Error('Sem internet. As notas permanecem neste aparelho; sincronize depois.');
+    if (!isAuthorized()) throw Error('Conecte sua conta Google novamente para sincronizar.');
+  }
+  async function driveFetch(url, opts = {}) {
+    requireAuth();
+    const headers = new Headers(opts.headers || {});
+    headers.set('Authorization', 'Bearer ' + accessToken);
+    const res = await fetch(url, {...opts, headers});
+    if (!res.ok) {
+      let detail = '';
+      try { const e = await res.json(); detail = e.error?.message || ''; } catch {}
+      if (res.status === 401) { accessToken = null; authorizedUntil = 0; }
+      throw Error('Google Drive (' + res.status + '): ' + (detail || res.statusText));
+    }
+    return res;
+  }
+  const escapeQ = text => text.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  async function listFiles(q) {
+    const qs = new URLSearchParams({q, spaces:'drive', fields:'nextPageToken,files(id,name,mimeType,md5Checksum,modifiedTime)',pageSize:'100'});
+    const all = [];
+    let pageToken;
+    do {
+      if (pageToken) qs.set('pageToken', pageToken); else qs.delete('pageToken');
+      const data = await (await driveFetch(API + '?' + qs)).json();
+      all.push(...(data.files || [])); pageToken = data.nextPageToken;
+    } while (pageToken);
+    return all;
+  }
+  async function getFolder(create = false) {
+    if (folderId) return folderId;
+    const result = await listFiles("name = '" + escapeQ(FOLDER) + "' and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
+    if (result.length > 1) throw Error('Há mais de uma pasta com este nome criada pelo aplicativo. Organize as duplicatas no Drive.');
+    if (result.length === 1) return (folderId = result[0].id);
+    if (!create) return null;
+    const res = await driveFetch(API + '?fields=id', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:FOLDER,mimeType:'application/vnd.google-apps.folder'})});
+    return (folderId = (await res.json()).id);
+  }
+  // Um subdiretorio separado para cada protocolo; nunca mover ou excluir arquivos anteriores.
+  async function getProtocolFolder(code = safeProto(), create = false) {
+    if (protocolFolders.has(code)) return protocolFolders.get(code);
+    const root = await getFolder(create);
+    if (!root) return null;
+    const q = "name = '" + escapeQ(code) + "' and mimeType = 'application/vnd.google-apps.folder' and '" + root + "' in parents and trashed = false";
+    const found = await listFiles(q);
+    if (found.length > 1) throw Error('Ha pastas duplicadas para o protocolo ' + code + '. Organize-as no Google Drive.');
+    if (found.length) { protocolFolders.set(code,found[0].id); return found[0].id; }
+    if (!create) return null;
+    const res = await driveFetch(API + '?fields=id', {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:code,mimeType:'application/vnd.google-apps.folder',parents:[root]})});
+    const id=(await res.json()).id;
+    protocolFolders.set(code,id);return id;
+  }
+  const newestFirst = xs => xs.sort((a,b) => {
+    const dated = f => /^\d{4}-\d{2}-\d{2}_/.test(f.name || '');
+    if(dated(a)!==dated(b)) return dated(b)-dated(a);
+    return (b.name||'').localeCompare(a.name||'') || (b.modifiedTime||'').localeCompare(a.modifiedTime||'');
+  });
+  async function listProtocolSnapshots(code = safeProto()) {
+    const fid=await getProtocolFolder(code,false);
+    const result=fid ? await listFiles("'"+fid+"' in parents and mimeType = 'application/json' and trashed = false") : [];
+    const copies=result.filter(f=>f.name.endsWith('_'+code+'_avaliacoes.json'));
+    // Compatibilidade: o aplicativo antigo guardava um unico JSON na pasta raiz.
+    const root=await getFolder(false);
+    if(root){
+      const legacy=await listFiles("name = '"+escapeQ(code+'_avaliacoes.json')+"' and '"+root+"' in parents and trashed = false");
+      copies.push(...legacy);
+    }
+    return newestFirst(copies);
+  }
+  const findRemote = async () => (await listProtocolSnapshots())[0] || null;
+  async function remoteContent(fileId) {
+    const r = await driveFetch(API + '/' + encodeURIComponent(fileId) + '?alt=media');
+    return await r.text();
+  }
+  // Multipart garante que novo arquivo já seja criado com nome, pasta e conteúdo.
+  async function createJson(name, content, parentId) {
+    const boundary = 'ficha_' + Math.random().toString(36).slice(2);
+    const body = '--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'
+      + JSON.stringify({name, mimeType:'application/json', parents:[parentId]})
+      + '\r\n--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'
+      + content + '\r\n--'+boundary+'--';
+    const r = await driveFetch(UPLOAD + '?uploadType=multipart&fields=id,name,md5Checksum,modifiedTime', {
+      method:'POST', headers:{'Content-Type':'multipart/related; boundary='+boundary}, body
+    });
+    return r.json();
+  }
+  async function createBinary(name,blob,parentId){
+    const boundary='ficha_'+Math.random().toString(36).slice(2);
+    const body=new Blob([
+      '--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n',
+      JSON.stringify({name,mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',parents:[parentId]}),
+      '\r\n--'+boundary+'\r\nContent-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\n',
+      blob,'\r\n--'+boundary+'--'],{type:'multipart/related; boundary='+boundary});
+    const r=await driveFetch(UPLOAD+'?uploadType=multipart&fields=id,name',{method:'POST',headers:{'Content-Type':'multipart/related; boundary='+boundary},body});
+    return r.json();
+  }
+  async function uploadExcel(protocol,batch,folder){
+    if(safeProto()!==protocol) throw Error('O ensaio mudou durante a sincronizacao. Repita o envio.');
+    const excel=buildXlsx('all',true).blob;
+    return createBinary(batch+'.xlsx',excel,folder);
+  }
+  async function syncExcelOnly(){
+    if(busy) return;
+    busy=true;
+    const protocol=safeProto();
+    try{
+      requireAuth();
+      if(S.demo) throw Error('Remova os dados de demonstracao antes de enviar o Excel.');
+      status('Criando uma nova copia Excel do protocolo '+protocol+'...');
+      const folder=await getProtocolFolder(protocol,true);
+      const batch=newBatch();
+      await uploadExcel(protocol,batch,folder);
+      status('Novo Excel salvo em Avaliacoes_Fitopatologia/'+protocol+'/'+batch+'.xlsx.');
+    }catch(e){status('Falha ao enviar Excel: '+(e.message||String(e)),true);}
+    finally{busy=false;showInfo();}
+  }
+  async function remoteMeta(fileId) {
+    return (await (await driveFetch(API+'/'+encodeURIComponent(fileId)+'?fields=id,name,md5Checksum,modifiedTime')).json());
+  }
+  function validateState(data) {
+    if (!data || typeof data !== 'object' || !Array.isArray(data.vars) || !Array.isArray(data.hist)
+        || !data.notes || typeof data.notes !== 'object' || !data.ant || typeof data.ant !== 'object'
+        || typeof data.proto !== 'string' || data.npar < 1 || data.npar > 150) {
+      throw Error('Arquivo inválido ou incompatível com esta versão do aplicativo.');
+    }
+    return data;
+  }
+  function envelope() { return JSON.stringify({format:'ficha-voz-drive-v1', exportadoEm:new Date().toISOString(), estado:S}); }
+  function parseEnvelope(content) {
+    const data = JSON.parse(content);
+    if (data.format !== 'ficha-voz-drive-v1') throw Error('O arquivo não é um backup do aplicativo.');
+    return validateState(data.estado);
+  }
+  function downloadBlob(blob, name) {
+    const url = URL.createObjectURL(blob), link = document.createElement('a');
+    link.href=url; link.download=name; document.body.appendChild(link); link.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); link.remove(); },3000);
+  }
+  function backupLocal() {
+    downloadBlob(new Blob([envelope()],{type:'application/json'}), fileName());
+  }
+  function localHasRealData() {
+    return Object.keys(S.notes || {}).length > 0 || (S.hist || []).length > 0 || Object.keys(S.ant || {}).length > 0;
+  }
+  function applyRestored(state) {
+    const incoming = structuredClone(state);
+    const oldKey = 'fichaVoz.backup.antesRestauracao.' + Date.now();
+    try { localStorage.setItem(oldKey, envelope()); } catch { backupLocal(); }
+    if(protoId(incoming.proto)!==protoId(S.proto)) throw Error('Backup de outro ensaio. Crie ou abra o protocolo correto antes de restaurar.');
+    S = Object.assign(S, incoming);
+    migrate(); undoStack = [];
+    // Atualiza os inputs sem instalar listeners duplicados.
+    [['cProto','proto'],['cAval','avaliador'],['cData','data'],['cFen','fen'],['cArea','area'],['cDataAp','dataAp'],
+      ['cNap','nap'],['cNpar','npar'],['cTts','tts'],['cRate','rate'],['cAuto','auto'],['cWake','wake'],
+      ['cHfAnt','hfAnt'],['cHfBeep','hfBeep'],['cSaDelay','saDelay'],['cSaFocus','saFocus']]
+      .forEach(([id,key]) => { if(byId(id)) byId(id).value=S[key] ?? ''; });
+    save(); renderVarEditor(); renderHist(); render(); setupWake(); showInfo();
+  }
+  async function sync() {
+    if (busy) return;
+    busy = true;
+    const protocol=safeProto();
+    try {
+      requireAuth();
+      if(S.demo) throw Error('Remova os dados de demonstracao antes de sincronizar dados reais.');
+      const snapshot=envelope();
+      const folder=await getProtocolFolder(protocol,true);
+      const batch=newBatch();
+      status('Enviando novos arquivos JSON e Excel para '+protocol+'...');
+      // POST cria novos arquivos; nunca PATCH, jamais substitui o arquivo anterior.
+      const result=await createJson(batch+'.json',snapshot,folder);
+      let excelError='';
+      try { await uploadExcel(protocol,batch,folder); }
+      catch(e){excelError=e.message||String(e);}
+      if(safeProto()===protocol){
+        if(excelError){
+          status('Novo JSON salvo em '+protocol+'/'+batch+'.json, mas o Excel falhou: '+excelError+'. Use Enviar Excel ao Drive para tentar novamente.',true);
+        }else{
+          setLocalMeta({fileId:result.id,md5:result.md5Checksum,syncedAt:new Date().toISOString()});
+          status('Novos arquivos JSON e Excel salvos na pasta '+protocol+'. Nenhum arquivo anterior foi substituido.');
+        }
+      }
+    } catch(e) { status(e.message||String(e),true); }
+    finally {busy=false;showInfo();}
+  }
+  async function restoreRemote() {
+    if (busy) return;
+    busy=true;
+    try {
+      requireAuth();
+      const remote = await findRemote(false);
+      if (!remote) throw Error('Não encontrei backup deste protocolo na pasta do Drive. Confira o código do protocolo em Ajustes.');
+      const raw = await remoteContent(remote.id);
+      const state = parseEnvelope(raw);
+      if (safeProto() !== protoId(state.proto)) throw Error('O protocolo do arquivo remoto não corresponde ao protocolo atual.');
+      if (!confirm('Restaurar a cópia do Drive para o protocolo ' + S.proto + '? As informações locais atuais serão substituídas. Um backup local será preservado antes.')) return;
+      applyRestored(state);
+      const fresh = await remoteMeta(remote.id);
+      setLocalMeta({fileId:remote.id,md5:fresh.md5Checksum,syncedAt:new Date().toISOString()});
+      status('Avaliações restauradas do Drive com sucesso.');
+    } catch(e) { status(e.message || String(e),true); }
+    finally { busy=false; }
+  }
+  async function listRemoteProjects(){
+    requireAuth();
+    const root=await getFolder(false);
+    if(!root)return [];
+    const folders=await listFiles("'"+root+"' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
+    const copies=[];
+    for(const folder of folders){
+      const files=await listFiles("'"+folder.id+"' in parents and mimeType = 'application/json' and trashed = false");
+      copies.push(...newestFirst(files.filter(f=>f.name.endsWith('_'+folder.name+'_avaliacoes.json'))).slice(0,1));
+    }
+    // Antigos backups continuam disponiveis para importacao sem serem movidos.
+    const legacy=await listFiles("'"+root+"' in parents and name contains '_avaliacoes.json' and trashed = false");
+    const existing=new Set(folders.map(f=>f.name));
+    copies.push(...legacy.filter(f=>f.name.endsWith('_avaliacoes.json') && !existing.has(f.name.replace(/_avaliacoes\.json$/,''))));
+    return copies.sort((a,b)=>a.name.localeCompare(b.name));
+  }
+  async function importRemoteProject(){
+    if(busy)return;
+    busy=true;
+    try{
+      requireAuth();
+      const id=byId('driveRemoteList').value;
+      if(!id)throw Error('Clique em Listar ensaios do Drive e escolha um protocolo.');
+      const raw=await remoteContent(id);
+      const state=parseEnvelope(raw);
+      const code=protoId(state.proto);
+      if(FichaEnsaios.has(code))throw Error('Esse ensaio ja esta no aparelho. Abra-o em Meus ensaios e use Restaurar do Drive.');
+      if(!confirm('Recuperar '+code+' do Drive para este aparelho?'))return;
+      FichaEnsaios.importState(state);
+      const remote=await remoteMeta(id);
+      setLocalMeta({fileId:id,md5:remote.md5Checksum,syncedAt:new Date().toISOString()});
+      status('Ensaio '+code+' recuperado do Drive.');
+    }catch(e){status(e.message||String(e),true);}
+    finally{busy=false;}
+  }
+  async function forceSync() {
+    if (!confirm('Criar um NOVO par de arquivos JSON e Excel? Os arquivos anteriores serao preservados.')) return;
+    await sync();
+  }
+  async function loadGIS() {
+    if (window.google?.accounts?.oauth2) return;
+    if (!navigator.onLine) throw Error('É necessário internet para autenticar no Google.');
+    await new Promise((resolve,reject)=>{
+      const old=document.querySelector('script[data-gis]');
+      if (old) { old.addEventListener('load',resolve,{once:true});old.addEventListener('error',()=>reject(Error('Não foi possível carregar a autenticação Google.')),{once:true});return; }
+      const el=document.createElement('script');el.src='https://accounts.google.com/gsi/client';el.async=true;el.dataset.gis='1';
+      el.onload=resolve;el.onerror=()=>reject(Error('Falha ao carregar autenticação do Google.'));document.head.appendChild(el);
+    });
+  }
+  async function connect() {
+    try {
+      const clientId=byId('driveClientId').value.trim();
+      if (!/^[\w-]+\.apps\.googleusercontent\.com$/.test(clientId)) throw Error('Informe o ID do cliente OAuth 2.0 do tipo Aplicativo da Web.');
+      if (location.protocol !== 'https:' && !['localhost','127.0.0.1'].includes(location.hostname)) throw Error('Publique o aplicativo em HTTPS antes de usar o login Google.');
+      localStorage.setItem(SETTINGS_KEY,clientId);
+      await loadGIS();
+      status('Solicitando autorização Google...');
+      tokenClient=window.google.accounts.oauth2.initTokenClient({client_id:clientId,scope:OAUTH_SCOPE,callback:response=>{
+        if (response.error || !response.access_token) { status('Autorização negada ou não concluída.',true);return; }
+        folderId=null;protocolFolders.clear();
+        accessToken=response.access_token;
+        authorizedUntil=Date.now()+(Number(response.expires_in)||3500)*1000;
+        status('Google conectado. Pode sincronizar este protocolo.');
+        // Não sincroniza automaticamente ao conectar pela primeira vez: evita sobrescrever dados remotos.
+      }});
+      tokenClient.requestAccessToken({prompt:'consent'});
+    } catch(e) { status(e.message || String(e),true); }
+  }
+  // Nao cria arquivos a cada nota digitada: cada envio corresponde a uma avaliacao
+  // explicitamente sincronizada pelo usuario, evitando centenas de copias.
+  function queueAuto() { /* salvamento local offline continua automatico */ }
+  byId('driveClientId').value=localStorage.getItem(SETTINGS_KEY)||'';
+  byId('driveList').onclick=async()=>{
+    try{
+      status('Buscando protocolos no Drive...');
+      const files=await listRemoteProjects();
+      const sel=byId('driveRemoteList');sel.replaceChildren();
+      for(const f of files){const o=document.createElement('option');o.value=f.id;o.textContent=f.name.replace(/^\d{4}-\d{2}-\d{2}_[^_]+_[^_]+_/,'').replace(/_avaliacoes\.json$/,'');sel.append(o);}
+      status(files.length+' ensaio(s) encontrado(s) no Drive.');
+    }catch(e){status(e.message||String(e),true);}
+  };
+  byId('driveImportProject').onclick=importRemoteProject;
+  byId('driveConnect').onclick=connect;
+  byId('driveSync').onclick=()=>sync(false);
+  byId('driveExcelOnly').onclick=syncExcelOnly;
+  byId('driveRestore').onclick=restoreRemote;
+  if(byId('driveOverwrite')) { byId('driveOverwrite').hidden=true; byId('driveOverwrite').onclick=forceSync; }
+  byId('backupDownload').onclick=backupLocal;
+  byId('backupImport').onchange=async event=>{
+    const file=event.target.files?.[0];
+    if (!file) return;
+    try {
+      const state=parseEnvelope(await file.text());
+      if (!confirm('Importar backup do protocolo ' + state.proto + ' e substituir os dados atuais? Uma cópia local será preservada.')) return;
+      if (protoId(state.proto)!==protoId(S.proto)) {
+        if (FichaEnsaios.has(state.proto)) throw Error('Este protocolo ja existe. Abra-o em Meus ensaios antes de importar seu backup.');
+        FichaEnsaios.importState(state);
+      } else applyRestored(state);
+      // Dados importados não podem herdar revisão Drive previamente sincronizada.
+      localStorage.removeItem(metaKey());
+      status('Backup JSON importado. Para enviar ao Drive, sincronize e resolva qualquer conflito existente.');
+    } catch(e) { status('Não foi possível importar: '+e.message,true); }
+    finally { event.target.value=''; }
+  };
+  byId('driveOpen').onclick=async ()=>{
+    try { requireAuth(); const id=await getProtocolFolder(safeProto(),false) || await getFolder(false); if(!id) throw Error('A pasta ainda não foi criada. Sincronize primeiro.');window.open('https://drive.google.com/drive/u/0/folders/'+encodeURIComponent(id),'_blank','noopener'); }
+    catch(e){status(e.message,true);}
+  };
+  window.FichaDrive={isBusy:()=>busy,sync,listRemoteProjects};
+  window.addEventListener('ficha:project-switched',()=>{showInfo();status('Ensaio alterado para '+safeProto()+'. Cada envio cria novos arquivos na pasta do protocolo.');});
+  window.addEventListener('ficha:changed',queueAuto);
+  window.addEventListener('online',()=>{status('Internet disponivel. Use Sincronizar agora para guardar uma nova copia da avaliacao.');});
+  window.addEventListener('offline',()=>status('Offline: as avaliações continuam sendo guardadas neste dispositivo.'));
+  document.querySelectorAll('.tabs button').forEach(btn=>btn.addEventListener('click',()=>{if(btn.dataset.tab==='drive')showInfo();}));
+  showInfo();
+  if ('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost')) {
+    window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+  }
+  if (navigator.storage?.persist) navigator.storage.persist().catch(()=>{});
+})();
+
+</script>
 <script>
 /* Diagnostico de recursos offline: nao altera notas, historico nem login. */
 (()=>{
@@ -1749,10 +2236,10 @@ el("say").focus();
   try{
    const reg=await navigator.serviceWorker.ready;
    const cacheKeys=await caches.keys();
-   const found=cacheKeys.filter(k=>k.startsWith('ficha-voz-ui-v7-offline-atomico'));
+   const found=cacheKeys.filter(k=>k.startsWith('ficha-voz-ui-v8-tudo-inline'));
    if(!found.length){update('Uso offline ainda nao preparado. Abra com internet e atualize o aplicativo.');return;}
    const c=await caches.open(found[0]);
-   const paths=['./index.html','./ensaios.js','./drive-sync.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
+   const paths=['./index.html','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
    const checks=await Promise.all(paths.map(p=>c.match(new URL(p,reg.scope).href)));
    update(checks.every(Boolean)?'Pronto para abrir sem internet (interface e scripts armazenados).':'Cache incompleto: conecte-se a internet e atualize a pagina.');
   }catch(e){update('Nao foi possivel verificar o cache offline.');}
