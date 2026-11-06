@@ -862,7 +862,11 @@ function applyValues(p,values){
   S.cursor=firstEmpty(p);
   if(fieldNavigation() && complete) S.awaitingPlot=true;
   save(); render();
-  if(fieldNavigation() && complete) speak(`Parcela ${p} finalizada.`);
+  if(fieldNavigation() && complete){
+    const lastVar=S.vars.filter(v=>Object.prototype.hasOwnProperty.call(values,v.id)).pop();
+    const lastValue=lastVar ? S.notes[p][lastVar.id] : null;
+    speak(`${lastValue===null ? '' : fmt(lastValue)+'. '}Parcela ${p} finalizada.`);
+  }
   else readback(p);
   lastEntry={val:null,name:'',completedP:complete?p:null,wrote:Object.keys(values).length};
   if(complete && S.auto==="1" && p<S.npar) setTimeout(()=>setPlot(p+1), 350);
@@ -903,7 +907,7 @@ function applySeq(seq){
   if(completedP!==null){
     if(fieldNavigation()){
       flash(`Parcela ${completedP} finalizada.${ignored?` ${ignored} valor(es) excedente(s) ignorado(s).`:''}`, 'ok');
-      speak(`Parcela ${completedP} finalizada.`);
+      speak(`${lastVal===null ? "" : fmt(lastVal)+". "}Parcela ${completedP} finalizada.`);
     } else if(S.auto==="1" && completedP!==S.cur){
       flash(`Parcela ${completedP} completa. Agora parcela ${S.cur} — ${nextName}.`,"ok");
       if(wrote>1) { readback(completedP); } else { speak(`${dito}. Parcela ${S.cur}.`); }
@@ -1147,7 +1151,7 @@ function hfApply(alts){
     if(r.cmd==="clear"){ quiet=true; handle(used); quiet=false; hf.lastParcela=null; const a=hfPrompt(); hfSay("Parcela limpa. "+a, a); return; }
     if(r.cmd==="allzero"){
       quiet=true; handle(used); quiet=false;
-      if(fieldNavigation() && S.awaitingPlot) hfSay(`Parcela ${S.cur} finalizada.`);
+      if(fieldNavigation() && S.awaitingPlot) hfSay(`Zero. Parcela ${S.cur} finalizada.`);
       else {const a=hfPrompt(); hfSay("Tudo zero. "+a, a);}
       return;
     }
@@ -1159,7 +1163,7 @@ function hfApply(alts){
   quiet=true; handle(used); quiet=false;
   const dito = lastEntry.wrote && lastEntry.val!==null ? `${fmt(lastEntry.val)}. ` : "";
   if(fieldNavigation() && S.awaitingPlot){
-    hfSay(`Parcela ${S.cur} finalizada.`);
+    hfSay(`${dito}Parcela ${S.cur} finalizada.`);
     return;
   }
   if(lastEntry.completedP===S.npar && S.cur===S.npar && S.cursor===0){
@@ -1246,7 +1250,9 @@ function saCommit(){
   quiet=true; handle(txt); quiet=false;
   if(r.type!=="seq") hf.lastParcela=null;          // comando ou troca de parcela: reanuncia a parcela
   if(fieldNavigation() && S.awaitingPlot){
-    saSpeak(`Parcela ${S.cur} finalizada.`);
+    const notaFinal = (r.type==="seq" && lastEntry.wrote && lastEntry.val!==null)
+      ? `${fmt(lastEntry.val)}. ` : "";
+    saSpeak(`${notaFinal}Parcela ${S.cur} finalizada.`);
     return;
   }
   if(lastEntry.completedP===S.npar && S.cur===S.npar && S.cursor===0){
