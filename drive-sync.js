@@ -10,7 +10,7 @@
   const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
   const byId = id => document.getElementById(id);
   let accessToken = null, tokenClient = null, busy = false, folderId = null;
-  const protocolFolders = new Map();
+  const protocolFolders = new Map(); // chave: caminho completo, nao apenas protocolo
   let authorizedUntil = 0;
   const safeProto = () => protoId(S.proto) || 'ENSAIO';
   const fileName = () => safeProto() + '_avaliacoes.json'; // nome somente do backup baixado
@@ -79,36 +79,71 @@
     const res = await driveFetch(API + '?fields=id', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:FOLDER,mimeType:'application/vnd.google-apps.folder'})});
     return (folderId = (await res.json()).id);
   }
-  // Um subdiretorio separado para cada protocolo; nunca mover ou excluir arquivos anteriores.
-  async function getProtocolFolder(code = safeProto(), create = false) {
-    if (protocolFolders.has(code)) return protocolFolders.get(code);
-    const root = await getFolder(create);
-    if (!root) return null;
-    const q = "name = '" + escapeQ(code) + "' and mimeType = 'application/vnd.google-apps.folder' and '" + root + "' in parents and trashed = false";
-    const found = await listFiles(q);
-    if (found.length > 1) throw Error('Ha pastas duplicadas para o protocolo ' + code + '. Organize-as no Google Drive.');
-    if (found.length) { protocolFolders.set(code,found[0].id); return found[0].id; }
-    if (!create) return null;
-    const res = await driveFetch(API + '?fields=id', {method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({name:code,mimeType:'application/vnd.google-apps.folder',parents:[root]})});
-    const id=(await res.json()).id;
-    protocolFolders.set(code,id);return id;
+  const folderMime='application/vnd.google-apps.folder';
+  const protocolPath = code => {
+    if(!window.FichaEnsaios) return [];
+    return window.FichaEnsaios.pathForProtocol(code);
+  };
+  const printablePath = code => [FOLDER,...protocolPath(code),code].join('/');
+  async function childFolder(parent,name,create){
+    const q="name = '"+escapeQ(name)+"' and mimeType = '"+folderMime+"' and '"+parent+"' in parents and trashed = false";
+    const found=await listFiles(q);
+    if(found.length>1)throw Error('Pastas duplicadas em '+name+'. Organize as duplicatas no Drive antes de sincronizar.');
+    if(found.length)return found[0].id;
+    if(!create)return null;
+    const res=await driveFetch(API+'?fields=id',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,mimeType:folderMime,parents:[parent]})});
+    return (await res.json()).id;
+  }
+  async function getProtocolFolder(code=safeProto(),create=false){
+    const path=[...protocolPath(code),code];
+    const key=JSON.stringify(path);
+    if(protocolFolders.has(key))return protocolFolders.get(key);
+    let parent=await getFolder(create);
+    if(!parent)return null;
+    for(const name of path){
+      parent=await childFolder(parent,name,create);
+      if(!parent)return null;
+    }
+    protocolFolders.set(key,parent);
+    return parent;
+  }
+  // Descobre as pastas de protocolos em toda a arvore para preservar backups antigos
+  // apos mover/renomear pastas locais. Nao altera ou move arquivos remotos antigos.
+  async function scanRemoteProtocolFolders(){
+    const root=await getFolder(false);
+    if(!root)return [];
+    const queue=[{id:root,path:[]}],found=[],visited=new Set();
+    while(queue.length){
+      const node=queue.shift();
+      if(visited.has(node.id))continue;
+      visited.add(node.id);
+      if(visited.size>1000)throw Error('Mais de 1000 pastas no Drive. Reduza a estrutura para continuar.');
+      const kids=await listFiles("'"+node.id+"' in parents and mimeType = '"+folderMime+"' and trashed = false");
+      for(const child of kids){
+        const item={id:child.id,name:child.name,path:[...node.path,child.name]};
+        found.push(item);queue.push({id:child.id,path:item.path});
+      }
+    }
+    return found;
   }
   const newestFirst = xs => xs.sort((a,b) => {
     const dated = f => /^\d{4}-\d{2}-\d{2}_/.test(f.name || '');
     if(dated(a)!==dated(b)) return dated(b)-dated(a);
     return (b.name||'').localeCompare(a.name||'') || (b.modifiedTime||'').localeCompare(a.modifiedTime||'');
   });
-  async function listProtocolSnapshots(code = safeProto()) {
-    const fid=await getProtocolFolder(code,false);
-    const result=fid ? await listFiles("'"+fid+"' in parents and mimeType = 'application/json' and trashed = false") : [];
-    const copies=result.filter(f=>f.name.endsWith('_'+code+'_avaliacoes.json'));
-    // Compatibilidade: o aplicativo antigo guardava um unico JSON na pasta raiz.
+  async function listProtocolSnapshots(code=safeProto()){
     const root=await getFolder(false);
-    if(root){
-      const legacy=await listFiles("name = '"+escapeQ(code+'_avaliacoes.json')+"' and '"+root+"' in parents and trashed = false");
-      copies.push(...legacy);
+    if(!root)return [];
+    const all=await scanRemoteProtocolFolders();
+    const candidates=all.filter(f=>f.name===code);
+    const copies=[];
+    for(const candidate of candidates){
+      const files=await listFiles("'"+candidate.id+"' in parents and mimeType = 'application/json' and trashed = false");
+      copies.push(...files.filter(f=>f.name.endsWith('_'+code+'_avaliacoes.json')).map(f=>({...f,remotePath:candidate.path.slice(0,-1)})));
     }
+    const legacy=await listFiles("name = '"+escapeQ(code+'_avaliacoes.json')+"' and '"+root+"' in parents and trashed = false");
+    copies.push(...legacy.map(f=>({...f,remotePath:[]})));
     return newestFirst(copies);
   }
   const findRemote = async () => (await listProtocolSnapshots())[0] || null;
@@ -154,7 +189,7 @@
       const folder=await getProtocolFolder(protocol,true);
       const batch=newBatch();
       await uploadExcel(protocol,batch,folder);
-      status('Novo Excel salvo em Avaliacoes_Fitopatologia/'+protocol+'/'+batch+'.xlsx.');
+      status('Novo Excel salvo em '+printablePath(protocol)+'/'+batch+'.xlsx.');
     }catch(e){status('Falha ao enviar Excel: '+(e.message||String(e)),true);}
     finally{busy=false;showInfo();}
   }
@@ -210,7 +245,7 @@
       const snapshot=envelope();
       const folder=await getProtocolFolder(protocol,true);
       const batch=newBatch();
-      status('Enviando novos arquivos JSON e Excel para '+protocol+'...');
+      status('Enviando novos arquivos JSON e Excel para '+printablePath(protocol)+'...');
       // POST cria novos arquivos; nunca PATCH, jamais substitui o arquivo anterior.
       const result=await createJson(batch+'.json',snapshot,folder);
       let excelError='';
@@ -218,10 +253,10 @@
       catch(e){excelError=e.message||String(e);}
       if(safeProto()===protocol){
         if(excelError){
-          status('Novo JSON salvo em '+protocol+'/'+batch+'.json, mas o Excel falhou: '+excelError+'. Use Enviar Excel ao Drive para tentar novamente.',true);
+          status('Novo JSON salvo em '+printablePath(protocol)+'/'+batch+'.json, mas o Excel falhou: '+excelError+'. Use Enviar Excel ao Drive para tentar novamente.',true);
         }else{
           setLocalMeta({fileId:result.id,md5:result.md5Checksum,syncedAt:new Date().toISOString()});
-          status('Novos arquivos JSON e Excel salvos na pasta '+protocol+'. Nenhum arquivo anterior foi substituido.');
+          status('Novos JSON e Excel salvos em '+printablePath(protocol)+'. Arquivos anteriores preservados.');
         }
       }
     } catch(e) { status(e.message||String(e),true); }
@@ -245,21 +280,29 @@
     } catch(e) { status(e.message || String(e),true); }
     finally { busy=false; }
   }
+  let remoteProjects=[];
   async function listRemoteProjects(){
     requireAuth();
     const root=await getFolder(false);
     if(!root)return [];
-    const folders=await listFiles("'"+root+"' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
+    const folders=await scanRemoteProtocolFolders();
     const copies=[];
     for(const folder of folders){
       const files=await listFiles("'"+folder.id+"' in parents and mimeType = 'application/json' and trashed = false");
-      copies.push(...newestFirst(files.filter(f=>f.name.endsWith('_'+folder.name+'_avaliacoes.json'))).slice(0,1));
+      const matches=files.filter(f=>f.name.endsWith('_'+folder.name+'_avaliacoes.json'));
+      copies.push(...newestFirst(matches).slice(0,1).map(f=>({...f,remotePath:folder.path.slice(0,-1),protocol:folder.name})));
     }
-    // Antigos backups continuam disponiveis para importacao sem serem movidos.
     const legacy=await listFiles("'"+root+"' in parents and name contains '_avaliacoes.json' and trashed = false");
-    const existing=new Set(folders.map(f=>f.name));
-    copies.push(...legacy.filter(f=>f.name.endsWith('_avaliacoes.json') && !existing.has(f.name.replace(/_avaliacoes\.json$/,''))));
-    return copies.sort((a,b)=>a.name.localeCompare(b.name));
+    copies.push(...legacy.filter(f=>f.name.endsWith('_avaliacoes.json')).map(f=>({...f,remotePath:[],protocol:f.name.replace(/_avaliacoes\.json$/,'')})));
+    // Caso haja copias em diferentes locais, mostra a mais recente por protocolo.
+    const dedup=new Map();
+    for(const file of copies){
+      const key=file.protocol;
+      const previous=dedup.get(key);
+      if(!previous||new Date(file.modifiedTime)>new Date(previous.modifiedTime))dedup.set(key,file);
+    }
+    remoteProjects=[...dedup.values()].sort((a,b)=>a.protocol.localeCompare(b.protocol));
+    return remoteProjects;
   }
   async function importRemoteProject(){
     if(busy)return;
@@ -274,6 +317,11 @@
       if(FichaEnsaios.has(code))throw Error('Esse ensaio ja esta no aparelho. Abra-o em Meus ensaios e use Restaurar do Drive.');
       if(!confirm('Recuperar '+code+' do Drive para este aparelho?'))return;
       FichaEnsaios.importState(state);
+      const source=remoteProjects.find(f=>f.id===id);
+      if(source?.remotePath?.length){
+        const target=FichaEnsaios.ensurePath(source.remotePath);
+        FichaEnsaios.moveTo(code,target);
+      }
       const remote=await remoteMeta(id);
       setLocalMeta({fileId:id,md5:remote.md5Checksum,syncedAt:new Date().toISOString()});
       status('Ensaio '+code+' recuperado do Drive.');
@@ -322,7 +370,7 @@
       status('Buscando protocolos no Drive...');
       const files=await listRemoteProjects();
       const sel=byId('driveRemoteList');sel.replaceChildren();
-      for(const f of files){const o=document.createElement('option');o.value=f.id;o.textContent=f.name.replace(/^\d{4}-\d{2}-\d{2}_[^_]+_[^_]+_/,'').replace(/_avaliacoes\.json$/,'');sel.append(o);}
+      for(const f of files){const o=document.createElement('option');o.value=f.id;o.textContent=f.protocol+' — '+([FOLDER,...(f.remotePath||[]),f.protocol].join('/'));sel.append(o);}
       status(files.length+' ensaio(s) encontrado(s) no Drive.');
     }catch(e){status(e.message||String(e),true);}
   };
@@ -354,7 +402,7 @@
     catch(e){status(e.message,true);}
   };
   window.FichaDrive={isBusy:()=>busy,sync,listRemoteProjects};
-  window.addEventListener('ficha:project-switched',()=>{showInfo();status('Ensaio alterado para '+safeProto()+'. Cada envio cria novos arquivos na pasta do protocolo.');});
+  window.addEventListener('ficha:project-switched',()=>{showInfo();status('Ensaio alterado para '+safeProto()+'. Cada envio cria arquivos na hierarquia de pastas deste ensaio.');});
   window.addEventListener('ficha:changed',queueAuto);
   window.addEventListener('online',()=>{status('Internet disponivel. Use Sincronizar agora para guardar uma nova copia da avaliacao.');});
   window.addEventListener('offline',()=>status('Offline: as avaliações continuam sendo guardadas neste dispositivo.'));

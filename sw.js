@@ -1,5 +1,5 @@
 /* Avaliador Fitopatologico: HTML autonomo, versao 10. */
-const CACHE = 'ficha-voz-ui-v10-nota-final';
+const CACHE = 'ficha-voz-ui-v13-hierarquia-drive';
 const PREFIX = 'ficha-voz-ui-';
 const ASSETS = ['./index.html', './', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 self.addEventListener('install', event => {
