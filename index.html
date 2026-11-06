@@ -726,25 +726,71 @@ function pickVoice(){
   try{
     const vs=speechSynthesis.getVoices();
     ptVoice = vs.find(v=>/pt[-_]BR/i.test(v.lang)) || vs.find(v=>/^pt/i.test(v.lang)) || null;
-  }catch(e){}
+  }catch(e){ ptVoice=null; }
 }
-if("speechSynthesis" in window){ pickVoice(); speechSynthesis.onvoiceschanged=pickVoice; }
-let quiet=false;   // o ciclo guiado monta a própria fala; silencia a fala avulsa
-function speak(txt, onEnd){
+if("speechSynthesis" in window){
+  pickVoice();
+  speechSynthesis.addEventListener?.('voiceschanged',pickVoice);
+}
+let quiet=false;   // silencia confirmação avulsa no ciclo guiado
+let speechRequest=0;
+/* Só confirma o fim da fala depois de ela realmente iniciar. O fallback antigo
+   liberava o microfone mesmo quando o Android não havia reproduzido áudio. */
+function speak(txt,onEnd){
   if(quiet && !onEnd) return;
-  if((S.tts==="off" && !onEnd) || !("speechSynthesis" in window) || !txt){ if(onEnd) onEnd(); return; }
-  try{
-    speechSynthesis.cancel();
-    const u=new SpeechSynthesisUtterance(txt);
-    u.lang="pt-BR"; u.rate=parseFloat(S.rate)||1.2; if(ptVoice) u.voice=ptVoice;
-    if(onEnd){
-      let done=false; const fire=()=>{ if(done) return; done=true; onEnd(); };
-      u.onend=fire; u.onerror=fire;
-      // alguns navegadores móveis não disparam onend: rede de segurança pelo tamanho do texto
-      setTimeout(fire, Math.min(9000, 900 + txt.length*75));
+  if((S.tts==="off" && !onEnd) || !txt){ if(onEnd) onEnd(false); return; }
+  if(!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)){
+    if(onEnd) onEnd(false);
+    return;
+  }
+  const id=++speechRequest;
+  let finished=false, began=false, tries=0, timer=null, utterance=null;
+  const end=(ok)=>{
+    if(finished || id!==speechRequest) return;
+    finished=true; clearTimeout(timer);
+    if(onEnd) onEnd(Boolean(ok));
+  };
+  function attempt(){
+    if(id!==speechRequest || finished) return;
+    tries++; began=false;
+    try{
+      pickVoice();
+      speechSynthesis.cancel();
+      speechSynthesis.resume();
+      utterance=new SpeechSynthesisUtterance(txt);
+      utterance.lang='pt-BR';
+      utterance.rate=parseFloat(S.rate)||1.2;
+      // Na segunda tentativa use a voz padrão do Android, caso a preferida falhe.
+      if(ptVoice && tries===1) utterance.voice=ptVoice;
+      utterance.onstart=()=>{
+        if(id!==speechRequest || finished) return;
+        began=true;
+        clearTimeout(timer);
+        // Trava de segurança só para falas que de fato começaram.
+        timer=setTimeout(()=>{
+          if(id!==speechRequest || finished) return;
+          try{speechSynthesis.resume();}catch(e){}
+          timer=setTimeout(()=>end(false),3500);
+        },Math.max(12000,txt.length*220));
+      };
+      utterance.onend=()=>end(began);
+      utterance.onerror=(e)=>{
+        if(id!==speechRequest || finished) return;
+        clearTimeout(timer);
+        if(!began && tries<2) attempt(); else end(false);
+      };
+      speechSynthesis.speak(utterance);
+      // Alguns Samsung/Chrome não disparam onstart quando o motor TTS está inativo.
+      timer=setTimeout(()=>{
+        if(id!==speechRequest || finished || began) return;
+        if(tries<2) attempt(); else end(false);
+      },3000);
+    }catch(e){
+      clearTimeout(timer);
+      if(tries<2) attempt(); else end(false);
     }
-    speechSynthesis.speak(u);
-  }catch(e){ if(onEnd) onEnd(); }
+  }
+  attempt();
 }
 function fmt(n){ return (n===null||n===undefined||n==="") ? "—" : String(n).replace(".",","); }
 function readback(p){
@@ -914,14 +960,14 @@ function beep(){
   }catch(e){}
 }
 // texto do próximo pedido: parcela só quando muda, doença sempre, anterior se houver
-function hfPrompt(){
+function hfPrompt(forceAnterior=false){
   const p=S.cur, v=S.vars[S.cursor];
   let t="";
   if(hf.lastParcela!==p){ t+=`Parcela ${p}. `; hf.lastParcela=p; }
   t+=v.name+". ";
-  if(S.hfAnt==="1"){
+  if(forceAnterior || S.hfAnt==="1"){
     const a=(S.ant[p]||{})[v.id];
-    if(a!==undefined && a!==null) t+=`Anterior ${fmt(a)}. `;
+    t += (a!==undefined && a!==null) ? `Anterior ${fmt(a)}. ` : 'Sem nota anterior. ';
   }
   return t;
 }
@@ -940,6 +986,7 @@ function hfStart(){
   hfSay(hfPrompt());
 }
 function hfStop(msg){
+  speechRequest++;
   hf.on=false; hf.speaking=false; hf.listening=false; quiet=false;
   try{ hf.rec && hf.rec.abort(); }catch(e){}
   try{ speechSynthesis.cancel(); }catch(e){}
@@ -1049,6 +1096,7 @@ function saStart(){
   saAsk();
 }
 function saStop(msg){
+  speechRequest++;
   sa.on=false; sa.speaking=false; clearTimeout(sa.timer);
   try{ speechSynthesis.cancel(); }catch(e){}
   try{ hf.wl && hf.wl.release(); }catch(e){} hf.wl=null;
@@ -1072,11 +1120,18 @@ function saUnmute(){
 function saSpeak(text){
   saMute();
   hfState("falando","Falando — microfone fechado");
-  speak(text, ()=>{ if(sa.on) saUnmute(); });
+  speak(text, (played)=>{
+    if(!sa.on) return;
+    saUnmute();
+    if(!played){
+      hfMsg('A fala não foi reproduzida. Confira o volume de mídia e a voz em português nas configurações do Samsung. As notas podem ser lançadas normalmente.');
+      hfState('pronto','Áudio indisponível — confira volume de mídia / síntese de voz');
+    }
+  });
 }
 function saAsk(prefix){
   if(!sa.on) return;
-  sa.ask=hfPrompt();
+  sa.ask=hfPrompt(true);
   saSpeak((prefix||"")+sa.ask);
 }
 function saCommit(){
