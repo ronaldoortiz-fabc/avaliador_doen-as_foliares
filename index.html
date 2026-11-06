@@ -396,6 +396,7 @@ code{font-family:var(--font-num);background:var(--surface-2);padding:1px 5px;bor
       </div>
       <p id="driveStatus" class="tiny muted" role="status" aria-live="polite" style="margin:10px 0 0">Drive desconectado. As avaliações continuam salvas localmente.</p>
       <p id="driveSyncInfo" class="tiny muted" style="margin:6px 0 0"></p>
+       <p id="offlineStatus" class="tiny muted" role="status" aria-live="polite" style="margin:6px 0 0">Verificando arquivos para uso offline...</p>
       <p class="tiny muted">Ao sincronizar, o aplicativo tenta salvar <b>um JSON e um Excel separados para cada ensaio</b> no Drive. Se aparecer só JSON, use <b>Enviar Excel ao Drive</b> para repetir apenas a planilha, sem modificar o JSON.</p>
       <div class="row wrap" style="margin-top:10px">
         <button class="btn" id="driveList">Listar ensaios do Drive</button>
@@ -1739,5 +1740,27 @@ el("say").focus();
 
 <script src="./ensaios.js"></script>
 <script src="./drive-sync.js"></script>
+<script>
+/* Diagnostico de recursos offline: nao altera notas, historico nem login. */
+(()=>{
+ const update=(msg)=>{const e=document.getElementById('offlineStatus');if(e)e.textContent=msg;};
+ if(!('serviceWorker' in navigator)){update('Este navegador nao oferece suporte ao uso offline.');return;}
+ async function check(){
+  try{
+   const reg=await navigator.serviceWorker.ready;
+   const cacheKeys=await caches.keys();
+   const found=cacheKeys.filter(k=>k.startsWith('ficha-voz-ui-v7-offline-atomico'));
+   if(!found.length){update('Uso offline ainda nao preparado. Abra com internet e atualize o aplicativo.');return;}
+   const c=await caches.open(found[0]);
+   const paths=['./index.html','./ensaios.js','./drive-sync.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
+   const checks=await Promise.all(paths.map(p=>c.match(new URL(p,reg.scope).href)));
+   update(checks.every(Boolean)?'Pronto para abrir sem internet (interface e scripts armazenados).':'Cache incompleto: conecte-se a internet e atualize a pagina.');
+  }catch(e){update('Nao foi possivel verificar o cache offline.');}
+ }
+ window.addEventListener('load',()=>setTimeout(check,1200));
+ navigator.serviceWorker.addEventListener('controllerchange',()=>setTimeout(check,300));
+ window.addEventListener('online',()=>setTimeout(check,1300));
+})();
+</script>
 </body>
 </html>
