@@ -15,7 +15,7 @@ img{max-width:100%}
 [hidden]{display:none!important}
 </style>
 <title>Ficha de Voz · Fitopatologia</title>
-<meta name="app-offline-version" content="v11-botao-microfone">
+<meta name="app-offline-version" content="v14-pastas-sem-vazias-sem-mic-direto">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icons/icon-192.png" type="image/png">
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -180,16 +180,6 @@ main{flex:1;padding-block:14px 0;display:flex;flex-direction:column;gap:14px}
   width:92px;border:none;border-radius:var(--r);background:var(--accent);color:var(--accent-fg);
   font-weight:700;font-size:.95rem;cursor:pointer;font-family:var(--font-head);letter-spacing:.02em;
 }
-/* Botao grande de reconhecimento de voz direto, sem abrir o teclado. */
-.mic-big{flex:0 0 64px;min-height:52px;border:2px solid var(--accent);border-radius:var(--r);
-  background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;
-  cursor:pointer;touch-action:manipulation;position:relative;}
-.mic-big svg{width:32px;height:32px;fill:none;stroke:currentColor;stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round;}
-.mic-big.listening{background:var(--alert);border-color:var(--alert);color:white;animation:pulse 1.1s ease-in-out infinite;}
-.mic-big:disabled{opacity:.45;cursor:not-allowed;animation:none;}
-.mic-big:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}
-@media(max-width:390px){.mic-big{flex-basis:58px}.send{width:77px}}
-@media(prefers-reduced-motion:reduce){.mic-big.listening{animation:none}}
 .quick{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
 .quick button{
   white-space:nowrap;border:1px solid var(--line);background:var(--surface-2);color:var(--fg-dim);
@@ -523,9 +513,6 @@ code{font-family:var(--font-num);background:var(--surface-2);padding:1px 5px;bor
   <div class="feedback" id="fb">Toque no campo, use o microfone do teclado e fale só o número.</div>
   <div class="dictrow">
     <textarea id="say" rows="1" enterkeyhint="done" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="nota ou próxima parcela…"></textarea>
-    <button type="button" class="mic-big" id="micBigBtn" aria-label="Falar nota ou parcela pelo microfone" title="Toque para falar, toque novamente para parar" aria-pressed="false">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>
-    </button>
     <button class="send" id="sendBtn">Lançar</button>
   </div>
   <div class="quick">
@@ -1299,8 +1286,8 @@ el("say").addEventListener("input",()=>{
   hfState("ouvindo","Ouvindo o ditado…");
   sa.timer=setTimeout(saCommit, parseInt(S.saDelay||"1100",10));
 });
-el("hfBtn").onclick=()=>{ tapMicStop(); hf.on ? hfStop("Parado.") : hfStart(); };
-el("saBtn").onclick=()=>{ tapMicStop(); sa.on ? saStop("Parado.") : saStart(); };
+el("hfBtn").onclick=()=>{ hf.on ? hfStop("Parado.") : hfStart(); };
+el("saBtn").onclick=()=>{ sa.on ? saStop("Parado.") : saStart(); };
 
 /* ============================ render ============================ */
 // atualiza só o destaque do cursor, sem redesenhar (não tira o foco do campo)
@@ -1800,63 +1787,6 @@ function submitSay(){
   el("say").value="";
   el("say").focus();
 }
-/* Reconhecimento direto de uma fala por toque, sem microfone do teclado.
-   No Chrome Android, SpeechRecognition normalmente precisa de internet.
-   Modo assistido com teclado continua disponivel para ditado offline. */
-const tapMic={rec:null,active:false,done:false};
-function tapMicUi(active){
-  tapMic.active=active;
-  const b=el('micBigBtn');
-  b.classList.toggle('listening',active);
-  b.setAttribute('aria-pressed',String(active));
-  b.setAttribute('aria-label',active?'Parar captação de voz':'Falar nota ou parcela pelo microfone');
-  b.title=active?'Toque para encerrar a escuta':'Toque para falar';
-}
-function tapMicStop(){
-  const rec=tapMic.rec; tapMic.rec=null; tapMicUi(false);
-  try{if(rec)rec.abort();}catch(e){}
-}
-function tapMicStart(){
-  if(tapMic.active){tapMicStop();return;}
-  if(hf.on){flash('A avaliação guiada já controla o microfone.','err');return;}
-  if(sa.on && sa.speaking){flash('Aguarde o aplicativo terminar de falar.','err');return;}
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){flash('Microfone direto indisponível neste navegador. Use o microfone do teclado.','err');return;}
-  clearTimeout(sa.timer);
-  try{el('say').blur();}catch(e){} // nao abrir o teclado
-  let rec;try{rec=new SR();}catch(e){flash('Não foi possível iniciar o microfone.','err');return;}
-  tapMic.rec=rec;tapMic.done=false;rec.lang='pt-BR';rec.continuous=false;rec.interimResults=false;rec.maxAlternatives=4;
-  rec.onresult=(e)=>{
-    if(tapMic.rec!==rec||tapMic.done)return;
-    tapMic.done=true;
-    const texts=Array.from(e.results[0]||[]).map(x=>x.transcript.trim()).filter(Boolean);
-    // Ao aguardar parcela, procurar alternativa com numero valido.
-    const chosen=(fieldNavigation() && S.awaitingPlot)
-      ? (texts.find(t=>{const n=parsePlotNumber(t);return n!==null&&n>=1&&n<=S.npar;})||texts[0])
-      : (texts.find(t=>interpret(t).type!=='unknown' && interpret(t).type!=='empty')||texts[0]);
-    tapMic.rec=null;tapMicUi(false);
-    if(!chosen){flash('Não entendi. Toque no microfone e repita.','err');return;}
-    hfMsg('Ouvi: <b>'+chosen.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</b>');
-    if(sa.on){el('say').value=chosen;saCommit();}
-    else{handle(chosen);el('say').value='';}
-  };
-  rec.onerror=(e)=>{
-    if(tapMic.rec!==rec)return;
-    tapMic.done=true;tapMic.rec=null;tapMicUi(false);
-    if(e.error==='aborted')return;
-    if(e.error==='network')flash('Reconhecimento direto precisa de conexão neste aparelho. Offline, use o microfone do teclado.','err');
-    else if(e.error==='not-allowed'||e.error==='service-not-allowed')flash('Permita o uso do microfone nas configurações do Chrome.','err');
-    else flash('Não foi possível reconhecer a fala. Toque novamente para tentar.','err');
-  };
-  rec.onend=()=>{
-    if(tapMic.rec!==rec)return;
-    tapMic.rec=null;tapMicUi(false);
-    if(!tapMic.done)flash('Não ouvi a fala. Toque no microfone para tentar novamente.','err');
-  };
-  try{rec.start();tapMicUi(true);hfState('ouvindo','Ouvindo pelo botão de microfone…');}
-  catch(e){tapMic.rec=null;tapMicUi(false);flash('Microfone não iniciou. Confira a permissão no navegador.','err');}
-}
-el('micBigBtn').onclick=tapMicStart;
 el("sendBtn").onclick=submitSay;
 el("say").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); submitSay(); } });
 document.querySelectorAll(".quick button").forEach(b=> b.onclick=()=>{
@@ -2159,7 +2089,10 @@ el("say").focus();
     $('pastaNovoNome').placeholder=currentFolder?'Nova subpasta de '+selected:'Ex.: Verao 2026/27';
     const children=ff.filter(f=>f.parentId===(currentFolder||'')).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
     if(currentFolder===null){
-      folderTile(folderBox,'Sem pasta',codes.filter(c=>!folderFor(c)).length,()=>{currentFolder='';list();},'');
+      const withoutFolder=codes.filter(c=>!folderFor(c)).length;
+      if(withoutFolder>0){
+        folderTile(folderBox,'Sem pasta',withoutFolder,()=>{currentFolder='';list();},'');
+      }
     }
     if(currentFolder!=='')children.forEach(f=>folderTile(folderBox,f.name,folderCount(f.id),()=>{currentFolder=f.id;list();},f.id));
     if(currentFolder===null){
@@ -2648,7 +2581,7 @@ el("say").focus();
   try{
    const reg=await navigator.serviceWorker.ready;
    const cacheKeys=await caches.keys();
-   const found=cacheKeys.filter(k=>k==='ficha-voz-ui-v13-hierarquia-drive');
+   const found=cacheKeys.filter(k=>k==='ficha-voz-ui-v14-pastas-sem-vazias');
    if(!found.length){update('Uso offline ainda nao preparado. Abra com internet e atualize o aplicativo.');return;}
    const c=await caches.open(found[0]);
    const paths=['./index.html','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
